@@ -1,0 +1,59 @@
+{
+  "nodes": [
+    { "id": "node-00", "name": "Rig-00", "operator": "opC", "pos": [-3, 0, -3], "T_warn": 70, "T_max": 85, "L_max": 0.92, "X_nominal": 1000, "thermal": { "a": 8, "b": 0.01, "c": 0.15, "T_ambient": 22 } },
+    { "id": "node-01", "name": "Rig-01", "operator": "opA", "pos": [-1, 0, -3], "T_warn": 70, "T_max": 85, "L_max": 0.92, "X_nominal": 1000, "thermal": { "a": 8, "b": 0.01, "c": 0.15, "T_ambient": 22 } },
+    { "id": "node-02", "name": "Rig-02", "operator": "opA", "pos": [1, 0, -3], "T_warn": 70, "T_max": 85, "L_max": 0.92, "X_nominal": 1000, "thermal": { "a": 8, "b": 0.01, "c": 0.15, "T_ambient": 22 } },
+    { "id": "node-03", "name": "Rig-03", "operator": "opA", "pos": [3, 0, -3], "T_warn": 70, "T_max": 85, "L_max": 0.92, "X_nominal": 1000, "thermal": { "a": 8, "b": 0.01, "c": 0.15, "T_ambient": 22 } },
+    { "id": "node-04", "name": "Rig-04", "operator": "opB", "pos": [-3, 0, -1], "T_warn": 70, "T_max": 85, "L_max": 0.92, "X_nominal": 1000, "thermal": { "a": 8, "b": 0.01, "c": 0.15, "T_ambient": 22 } },
+    { "id": "node-05", "name": "Rig-05", "operator": "opB", "pos": [-1, 0, -1], "T_warn": 70, "T_max": 85, "L_max": 0.92, "X_nominal": 1000, "thermal": { "a": 8, "b": 0.01, "c": 0.15, "T_ambient": 22 } },
+    { "id": "node-06", "name": "Rig-06", "operator": "opB", "pos": [1, 0, -1], "T_warn": 70, "T_max": 85, "L_max": 0.92, "X_nominal": 1000, "thermal": { "a": 8, "b": 0.01, "c": 0.15, "T_ambient": 22 } },
+    { "id": "node-07", "name": "Rig-07", "operator": "opA", "pos": [3, 0, -1], "T_warn": 70, "T_max": 85, "L_max": 0.92, "X_nominal": 1000, "thermal": { "a": 8, "b": 0.01, "c": 0.15, "T_ambient": 22 } },
+    { "id": "node-08", "name": "Rig-08", "operator": "opA", "pos": [-3, 0, 1], "T_warn": 70, "T_max": 85, "L_max": 0.92, "X_nominal": 1000, "thermal": { "a": 8, "b": 0.01, "c": 0.15, "T_ambient": 22 } },
+    { "id": "node-09", "name": "Rig-09", "operator": "opA", "pos": [-1, 0, 1], "T_warn": 70, "T_max": 85, "L_max": 0.92, "X_nominal": 1000, "thermal": { "a": 8, "b": 0.01, "c": 0.15, "T_ambient": 22 } },
+    { "id": "node-10", "name": "Rig-10", "operator": "opB", "pos": [1, 0, 1], "T_warn": 70, "T_max": 85, "L_max": 0.92, "X_nominal": 1000, "thermal": { "a": 8, "b": 0.01, "c": 0.15, "T_ambient": 22 } },
+    { "id": "node-11", "name": "Rig-11", "operator": "opB", "pos": [3, 0, 1], "T_warn": 70, "T_max": 85, "L_max": 0.92, "X_nominal": 1000, "thermal": { "a": 8, "b": 0.01, "c": 0.15, "T_ambient": 22 } },
+    { "id": "node-12", "name": "Rig-12", "operator": "opB", "pos": [-3, 0, 3], "T_warn": 70, "T_max": 85, "L_max": 0.92, "X_nominal": 1000, "thermal": { "a": 8, "b": 0.01, "c": 0.15, "T_ambient": 22 } },
+    { "id": "node-13", "name": "Rig-13", "operator": "opC", "pos": [-1, 0, 3], "T_warn": 70, "T_max": 85, "L_max": 0.92, "X_nominal": 1000, "thermal": { "a": 8, "b": 0.01, "c": 0.15, "T_ambient": 22 } },
+    { "id": "node-14", "name": "Rig-14", "operator": "opC", "pos": [1, 0, 3], "T_warn": 70, "T_max": 85, "L_max": 0.92, "X_nominal": 1000, "thermal": { "a": 8, "b": 0.01, "c": 0.15, "T_ambient": 22 } },
+    { "id": "node-15", "name": "Rig-15", "operator": "opC", "pos": [3, 0, 3], "T_warn": 70, "T_max": 85, "L_max": 0.92, "X_nominal": 1000, "thermal": { "a": 8, "b": 0.01, "c": 0.15, "T_ambient": 22 } }
+  ],
+  "edges": [
+    { "from": "node-00", "to": "node-01", "weight": 0.4 },
+    { "from": "node-01", "to": "node-02", "weight": 0.4 },
+    { "from": "node-02", "to": "node-03", "weight": 0.4 },
+    { "from": "node-04", "to": "node-05", "weight": 0.4 },
+    { "from": "node-05", "to": "node-06", "weight": 0.4 },
+    { "from": "node-06", "to": "node-07", "weight": 0.4 },
+    { "from": "node-08", "to": "node-09", "weight": 0.4 },
+    { "from": "node-09", "to": "node-10", "weight": 0.4 },
+    { "from": "node-10", "to": "node-11", "weight": 0.4 },
+    { "from": "node-12", "to": "node-13", "weight": 0.4 },
+    { "from": "node-13", "to": "node-14", "weight": 0.4 },
+    { "from": "node-14", "to": "node-15", "weight": 0.4 },
+    { "from": "node-00", "to": "node-04", "weight": 0.4 },
+    { "from": "node-01", "to": "node-05", "weight": 0.4 },
+    { "from": "node-02", "to": "node-06", "weight": 0.4 },
+    { "from": "node-03", "to": "node-07", "weight": 0.4 },
+    { "from": "node-04", "to": "node-08", "weight": 0.4 },
+    { "from": "node-05", "to": "node-09", "weight": 0.4 },
+    { "from": "node-06", "to": "node-10", "weight": 0.4 },
+    { "from": "node-07", "to": "node-11", "weight": 0.4 },
+    { "from": "node-08", "to": "node-12", "weight": 0.4 },
+    { "from": "node-09", "to": "node-13", "weight": 0.4 },
+    { "from": "node-10", "to": "node-14", "weight": 0.4 },
+    { "from": "node-11", "to": "node-15", "weight": 0.4 },
+    { "from": "node-07", "to": "node-12", "weight": 0.6 }
+  ],
+  "detection": {
+    "temp_warn_delta": 5,
+    "throughput_drop_pct": 0.2,
+    "load_high": 0.85
+  },
+  "economy": {
+    "price": 10,
+    "settlementCapFactor": 1.5,
+    "defaultBalance": 1000,
+    "defaultBudgetFloor": 200,
+    "defaultEarnRate": 5
+  }
+}
