@@ -1,6 +1,11 @@
 # Stream C — verifier / correctness
 
 Owner: `@____` · Protocol + scope: [`BOARD.md`](BOARD.md) · Spec: plan §7, §9C, §1D
+Skills: [`subgraph`](../.claude/skills/subgraph/SKILL.md) · [`world-id`](../.claude/skills/world-id/SKILL.md) — **load before B2.3/B2.4 and before `authz.ts`**
+
+> ⚠️ **Subgraph Studio will not accept 0G Chain** (Galileo is not on The Graph's supported-networks
+> list). Your B2.4 is **local `graph-node` via docker** — that is the primary path, not a fallback.
+> Pull the docker images now. Read the `subgraph` skill first.
 
 You own the two deterministic, safety-relevant artifacts — the **verifier** and **`authz.ts`** — plus
 the acceptance harness that proves the whole thing is honest. You also picked up **B2.3/B2.4**

@@ -21,6 +21,35 @@ Lisbon time**. The plan's `H` labels are kept only as cross-references to its se
 
 ---
 
+## Skills — load these before writing sponsor code
+
+Project skills live in `.claude/skills/` and are committed, so every teammate's Claude Code picks
+them up on pull. They carry **API surface verified against live docs on 25 Jul**, plus the
+Verimesh-specific wiring and the traps.
+
+| Skill | Load it for |
+|---|---|
+| [`world-id`](../.claude/skills/world-id/SKILL.md) | IDKit 4.x, RP signing, nullifiers, the T0/T1/T2 gate, the quorum |
+| [`zerog`](../.claude/skills/zerog/SKILL.md) | 0G Compute broker + attestation, 0G Storage blobs, 0G Chain/Galileo |
+| [`subgraph`](../.claude/skills/subgraph/SKILL.md) | registry events, manifest, AssemblyScript mappings, graph-node, GraphQL, MCP |
+
+**Two corrections these turned up — they change tasks already on this board:**
+
+1. **World ID v4 killed `verifyCloudProof`.** The plan (§5, §9 B5) cites the v3 API. Verification
+   is now `POST https://developer.world.org/api/v4/verify/{rp_id}`, the widget will not open
+   without a backend-signed `rp_context`, and the field is `nullifier` (hex), not `nullifier_hash`.
+   **Consequence:** `B5.1` now hard-blocks `A3.6.1` — there is no "render the widget first" path.
+2. **Subgraph Studio will not accept 0G Chain.** Galileo is not on The Graph's supported-networks
+   list. `B2.4`'s "Studio first" was backwards — **local `graph-node` via docker is the primary
+   path.** Pull the docker images now, not at 16:45.
+
+Also: the 0G npm scope is **`@0gfoundation`**, not `@0glabs` as the plan's appendix says.
+
+If a skill fights the SDK, re-read the live docs and **update the skill file** — do not work
+around it silently and leave the next person to rediscover it.
+
+---
+
 ## Protocol (read this before you touch the board — humans and AI agents)
 
 1. **Before editing:** `git pull --rebase`
@@ -32,7 +61,8 @@ Lisbon time**. The plan's `H` labels are kept only as cross-references to its se
    ```
    git add TASKS/ && git commit -m "tasks: <what changed>" && git push
    ```
-5. **Task line format** — keep it exactly this shape so agents can parse it:
+5. **Load the relevant skill before writing sponsor code.** `world-id`, `zerog`, `subgraph`.
+6. **Task line format** — keep it exactly this shape so agents can parse it:
    ```
    - [ ] **B2.1** Deploy registry to 0G Chain testnet · 45m · needs: H0.2 · unblocks: B2.3
    ```
@@ -40,9 +70,9 @@ Lisbon time**. The plan's `H` labels are kept only as cross-references to its se
    * finish it → flip to `- [x]` and replace the WIP tag with ` · done HH:MM`
    * stuck → append ` · **BLOCKED: <one line why>**` *and* add a row to the Blockers table
    * dropped → flip to `- [~]` and append ` · **CUT: <why>**`
-6. **Do not restructure this board mid-event.** Add lines, flip boxes. Reorganising costs
+7. **Do not restructure this board mid-event.** Add lines, flip boxes. Reorganising costs
    conflicts and buys nothing.
-7. **AI agents:** you may flip your own owner's boxes and add sub-tasks under an existing task.
+8. **AI agents:** you may flip your own owner's boxes and add sub-tasks under an existing task.
    You may not cut a task, change an estimate, or edit another stream's file without the human
    saying so.
 
@@ -63,7 +93,7 @@ Lisbon time**. The plan's `H` labels are kept only as cross-references to its se
 | Gate | When | Test | If it fails |
 |---|---|---|---|
 | **G1 · Contract freeze** | Sat **13:30** | `pnpm typecheck` green with ✦ authz types; registry + `schema.graphql` match | Nobody starts real work until this passes. It blocks all three streams. |
-| **G2 · THE GRAPH GO/NO-GO** | Sat **17:00** *(hard)* | A subgraph indexes a real event from our registry and a GraphQL query returns it | Take the fallback ladder in `STREAM-B.md` B2.5 **immediately**. Do not keep debugging. |
+| **G2 · THE GRAPH GO/NO-GO** | Sat **17:00** *(hard)* | A **local graph-node** indexes a real event from our registry and a GraphQL query returns it | Take the ladder in `STREAM-B.md` B2.5 **immediately** — move the registry to a Graph-supported chain. Do not keep debugging docker. |
 | **G3 · End-to-end** | Sun **02:00** | `ambiguous_cascade` runs headless: detect → history → LLM → verify → freeze → World ID → commit → on-chain → indexed | Cut to the demo-only path: seed the history, hand-drive the scenario in the UI. |
 
 ---

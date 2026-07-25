@@ -1,6 +1,11 @@
 # Stream A — frontend / 3D
 
 Owner: `@____` · Protocol + scope: [`BOARD.md`](BOARD.md) · Spec: plan §8
+Skills: [`world-id`](../.claude/skills/world-id/SKILL.md) · [`subgraph`](../.claude/skills/subgraph/SKILL.md) · [`zerog`](../.claude/skills/zerog/SKILL.md) — **load before writing sponsor code**
+
+> ⚠️ **World ID v4:** the plan's `verifyCloudProof` is gone. The widget will not open without a
+> backend-signed `rp_context`, so **B5.1 hard-blocks A3.6.1** — build the route first. Read the
+> `world-id` skill before you touch IDKit.
 
 `apps/web/` is **empty**. You are building from zero, and you also picked up **B4** and **B5.1** in
 the G1 rebalance (both are Next.js API routes that belong in your app anyway).

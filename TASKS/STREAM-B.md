@@ -28,15 +28,18 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
 - [ ] **B2.2** Script emits one `Committed` event; confirm the tx in the 0G explorer · 15m · needs: B2.1
 - [ ] **B2.3** Subgraph: `subgraph.yaml` pointed at the deployed address + AssemblyScript mappings
       for all four events · 60m · needs: H0.3, B2.1 · **owner: C** (G1 rebalance)
-- [ ] **B2.4** Deploy the subgraph — **Subgraph Studio first**, local `graph-node` (docker) only if
-      Studio won't take 0G Chain; query it in GraphiQL and get B2.2's event back · 60m · needs: B2.3
-      · **owner: C** (G1 rebalance)
+- [ ] **B2.4** Deploy the subgraph — ⚠️ **local `graph-node` via docker-compose against the 0G Chain
+      RPC. This is the primary path, NOT the fallback.** 0G Chain is not on The Graph's
+      supported-networks list, so **Subgraph Studio will reject it**. Query in GraphiQL and get
+      B2.2's seeded event back · 60m · needs: B2.3 · **owner: C** · ⚠️ **feeds G2 at 17:00**
+- [ ] **B2.4a** Pull the docker images (graph-node + IPFS + Postgres) **in the background now**,
+      while B2.3 is being written. Do not start this at 16:45 · 5m
 - [ ] **B2.5** ⚠️ **G2 · 17:00 GO/NO-GO.** This is a *chain-selection* contingency, not a feature
       cut — the subgraph ships either way. If B2.4 is not green, take the ladder **in order, now**:
-      1. redeploy the registry to a **Graph-native testnet** (Arbitrum Sepolia) and index that
-         — keep 0G Compute + Storage as the 0G story
-      2. local `graph-node` via docker-compose against 0G Chain RPC
-      3. mirror history in Supabase, subgraph stays a read-only proof of the pipeline
+      1. redeploy the registry to a network that **is** on The Graph's supported-networks list and
+         index that instead — 0G keeps Compute + Storage, only the registry's host chain moves.
+         **Check the live list first; do not assume Sepolia or Arbitrum Sepolia are on it.**
+      2. mirror history in Supabase, subgraph stays a read-only proof of the pipeline
       · needs: B2.4
 - [ ] **B2.6** Publish `SUBGRAPH_URL` to the team — **A is blocked on this** and A cannot build the
       history views without it. If it will be late, give A a hand-written fixture response at 15:00
@@ -55,8 +58,11 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
 
 ## Sat 18:00 → 22:00 · World ID (plan §9 B5 + §1D)
 
-- [ ] **B5.1** `/api/worldid/sign` + `/api/worldid/verify` using `verifyCloudProof`
-      · 45m · **owner: A** (G1 rebalance — it lives in A's Next.js app)
+- [ ] **B5.1** `/api/worldid/sign` (RP context via `signRequest`) + `/api/worldid/verify`
+      (POST `developer.world.org/api/v4/verify/{rp_id}`) · 45m · **owner: A** (G1 rebalance — it
+      lives in A's Next.js app) · ⚠️ **the plan's `verifyCloudProof` is the v3 API and is gone —
+      see the `world-id` skill.** The widget cannot open without a backend-signed `rp_context`, so
+      **this blocks A3.6.1** · unblocks: A3.6.1
 - [ ] **B5.2** Valid proof → record a `HumanApproval` (nullifier + enrolled operator) against the
       open `human_gate` · 45m · needs: B5.1, H0.5
 - [ ] **B5.3** Wire C's `authz.ts` into the freeze branch: verdict + projected blast radius →
