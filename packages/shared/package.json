@@ -10,7 +10,6 @@
     "./types": "./src/types.ts",
     "./schema": "./src/schema.ts",
     "./physics": "./src/physics.ts",
-    "./economics": "./src/economics.ts",
     "./blueprint": "./src/genio_blueprint.json"
   },
   "dependencies": {

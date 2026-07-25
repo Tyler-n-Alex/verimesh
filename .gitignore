@@ -4,6 +4,9 @@ dist/
 out/
 build/
 coverage/
+artifacts/
+cache/
+generated/
 *.tsbuildinfo
 .env
 .env.*

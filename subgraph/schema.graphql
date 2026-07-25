@@ -1,0 +1,27 @@
+type Decision @entity(immutable: true) {
+  id: ID!
+  nodeId: String!
+  operator: String!
+  action: String!
+  verdict: String!
+  zerogRoot: Bytes
+  ts: BigInt!
+  txHash: Bytes!
+}
+
+type Freeze @entity(immutable: true) {
+  id: ID!
+  nodeId: String!
+  operator: String!
+  reason: String!
+  ts: BigInt!
+  txHash: Bytes!
+}
+
+type Override @entity(immutable: true) {
+  id: ID!
+  worldIdNullifier: Bytes!
+  chosenAction: String!
+  ts: BigInt!
+  txHash: Bytes!
+}

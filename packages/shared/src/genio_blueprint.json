@@ -48,12 +48,5 @@
     "temp_warn_delta": 5,
     "throughput_drop_pct": 0.2,
     "load_high": 0.85
-  },
-  "economy": {
-    "price": 10,
-    "settlementCapFactor": 1.5,
-    "defaultBalance": 1000,
-    "defaultBudgetFloor": 200,
-    "defaultEarnRate": 5
   }
 }

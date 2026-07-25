@@ -1,0 +1,30 @@
+specVersion: 1.0.0
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: VerimeshRegistry
+    network: zerog-testnet
+    source:
+      address: "0x0000000000000000000000000000000000000000"
+      abi: VerimeshRegistry
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Decision
+        - Freeze
+        - Override
+      abis:
+        - name: VerimeshRegistry
+          file: ./abis/VerimeshRegistry.json
+      eventHandlers:
+        - event: Committed(indexed bytes32,string,string,string,string,bytes32,uint256)
+          handler: handleCommitted
+        - event: Frozen(indexed bytes32,string,string,string,uint256)
+          handler: handleFrozen
+        - event: HumanOverride(indexed bytes32,bytes32,string)
+          handler: handleHumanOverride
+      file: ./src/mappings.ts

@@ -1,0 +1,15 @@
+{
+  "name": "verimesh-subgraph",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "codegen": "graph codegen",
+    "build": "graph build",
+    "create-local": "graph create --node http://localhost:8020/ verimesh",
+    "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 verimesh"
+  },
+  "devDependencies": {
+    "@graphprotocol/graph-cli": "^0.80.0",
+    "@graphprotocol/graph-ts": "^0.35.0"
+  }
+}

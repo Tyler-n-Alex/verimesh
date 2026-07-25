@@ -31,17 +31,9 @@ export interface Edge {
   weight: number;
 }
 
-export interface EconomicState {
-  nodeId: string;
-  balance: number;
-  budgetFloor: number;
-  earnRate: number;
-}
-
 export type GridState = {
   nodes: GridNode[];
   edges: Edge[];
-  economy: EconomicState[];
 };
 
 export const ACTIONS = [
@@ -66,18 +58,7 @@ export interface Proposal {
 
 export type Verdict = "VERIFIED" | "VIOLATION_TRIGGERED" | "ESCALATE";
 
-export type ViolationKind = "physical" | "economic";
-
-export interface Settlement {
-  from: string;
-  to: string;
-  amount: number;
-  reason: Action;
-  hederaTxId?: string;
-}
-
 export interface Violation {
-  kind: ViolationKind;
   node: string;
   metric: string;
   value: number;
@@ -89,10 +70,31 @@ export interface VerdictResult {
   detail: string;
   violated?: Violation;
   projected: Record<string, NodeMetrics>;
-  settlements: Settlement[];
 }
 
 export type VerifyConstraints = (
   state: GridState,
   action: Proposal
 ) => VerdictResult;
+
+export interface DecisionRecord {
+  id: string;
+  nodeId: string;
+  operator: string;
+  action: string;
+  verdict: string;
+  humanAuthorized: boolean;
+  worldIdNullifier?: string;
+  zerogRoot?: string;
+  chainTxHash?: string;
+  ts: number;
+}
+
+export interface HistoryEntry {
+  nodeId: string;
+  operator: string;
+  action: string;
+  verdict: string;
+  outcome: string;
+  ts: number;
+}
