@@ -123,15 +123,50 @@ const [tx, uploadErr] = await indexer.upload(file, process.env.ZEROG_RPC!, signe
 await file.close();
 ```
 
-Download:
-
-```ts
-const err = await indexer.download(rootHash, outputPath, true);
-```
+> ✅ **Verified against `@0gfoundation/0g-storage-ts-sdk@1.2.10`, 25 Jul 16:25.** Three fixes:
+>
+> **1. For a blob you build in memory, use `MemData`, not `ZgFile`.** Our reasoning blob is
+> assembled from Supabase rows, so there is no file — `ZgFile.fromFilePath` would mean writing a
+> temp file inside a serverless route for no reason. `MemData` takes the bytes directly and needs
+> no `close()`:
+>
+> ```ts
+> import { Indexer, MemData } from "@0gfoundation/0g-storage-ts-sdk";
+>
+> const payload = new TextEncoder().encode(JSON.stringify(blob, null, 2));
+> const file = new MemData(payload);
+> const [tree, treeErr] = await file.merkleTree();
+> const [result, uploadErr] = await indexer.upload(file, rpc, signer);
+> ```
+>
+> **2. `indexer.upload` returns a union and must be narrowed.** It is
+> `{txHash, rootHash, txSeq}` **or** `{txHashes, rootHashes, txSeqs}` — reading `.rootHash`
+> blindly gives `undefined` for the multi-fragment case:
+>
+> ```ts
+> const root = "rootHash" in result ? result.rootHash : result.rootHashes[0];
+> ```
+>
+> **3. `downloadToBlob` takes an options object; `download` takes a positional boolean.** Mixing
+> them up is a type error at best and a silently unproven download at worst:
+>
+> ```ts
+> await indexer.download(rootHash, outputPath, true);        // proof as 3rd positional arg
+> await indexer.downloadToBlob(rootHash, { proof: true });   // proof inside DownloadOption
+> ```
+>
+> Prefer `downloadToBlob` in a route — no filesystem, and you can serve the bytes straight back.
+> That is what makes "open the reasoning blob" in the audit drawer fetch the *real* payload rather
+> than link at an explorer URL we would be guessing at.
 
 Every SDK call returns a **`[value, error]` tuple, not a throw**. Destructure and check
 `uploadErr` / `treeErr` explicitly — an ignored tuple gives you an `undefined` root hash that
-propagates all the way to a broken explorer link in the demo. Always `await file.close()`.
+propagates all the way to a broken explorer link in the demo. Always `await file.close()` for a
+`ZgFile` (`MemData` holds no handle).
+
+Live implementation:
+[`apps/web/src/app/api/zerog/store/route.ts`](../../../apps/web/src/app/api/zerog/store/route.ts) and
+[`apps/web/src/app/api/zerog/blob/route.ts`](../../../apps/web/src/app/api/zerog/blob/route.ts).
 
 The `rootHash` is our `zerogRoot` — it goes into `commits.zerog_root`, into the registry
 `Committed` event, and into the audit drawer as a link.
