@@ -197,6 +197,13 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
       feed the result into the diagnose context. Land it on **plain GraphQL** first so the loop is
       unblocked, then B7 swaps the transport underneath · 45m · needs: B2.6 · unblocks: B7 · done 19:57
       · `loop.ts`'s `fetchHistory` — plain GraphQL by default, `HISTORY_VIA_MCP=1` swaps the transport
+      · **re-verified 21:11 against the real deployed subgraph** (C's B2.4) — `getHistory("node-09",
+      "opA")` returns both seeded incidents with `incidentCount: 2`. Caught a stale local
+      `.env.local`: mine still had the old Studio *dashboard* URL C's note warned about
+      (`https://thegraph.com/studio/subgraph/...` — returns HTML, silently falls back to fixtures);
+      fixed to the real query endpoint from `.env.example` and added the new `REGISTRY_START_BLOCK`/
+      `NEXT_PUBLIC_REGISTRY_ADDRESS` vars. **Worth every teammate double-checking their own
+      `.env.local` against `.env.example` after pulling B2.4**, since that file isn't tracked
 - [x] **B6.3** Diagnose + propose — the **one** LLM decision, via B3, telemetry + history in context
       · 45m · needs: B3, B6.2 · done 20:19 · B3 unblocked — `loop.ts` calls `proposeAction`, which now
       runs real 0G attested inference with `zerogInferenceValid: true` instead of the heuristic fallback
