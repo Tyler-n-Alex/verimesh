@@ -123,11 +123,18 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
 
 ## Sat 18:00 → 22:00 · World ID (plan §9 B5 + §1D)
 
-- [ ] **B5.1** `/api/worldid/sign` (RP context via `signRequest`) + `/api/worldid/verify`
+- [x] **B5.1** `/api/worldid/sign` (RP context via `signRequest`) + `/api/worldid/verify`
       (POST `developer.world.org/api/v4/verify/{rp_id}`) · 45m · **owner: A** (G1 rebalance — it
       lives in A's Next.js app) · ⚠️ **the plan's `verifyCloudProof` is the v3 API and is gone —
       see the `world-id` skill.** The widget cannot open without a backend-signed `rp_context`, so
-      **this blocks A3.6.1** · unblocks: A3.6.1
+      **this blocks A3.6.1** · unblocks: A3.6.1 · done 21:06 · all four env vars now set
+      (`NEXT_PUBLIC_WORLDID_APP_ID`, `WORLDID_RP_ID`, `WORLDID_SIGNING_KEY`, `WORLDID_ACTION`).
+      Hit `/api/worldid/sign` for real against a running dev server: `200`, `configured: true`,
+      full valid `rp_context` (signature/nonce/timestamps) back. The widget can now actually open.
+      `/api/worldid/verify` (A's route) already has the full B5.2–B5.5 logic built — allowlist
+      check, duplicate-nullifier rejection, distinct-quorum satisfaction, per-gate operator
+      coverage — reviewed the code, did not exercise it, since that needs a real IDKit proof from
+      an actual scan (phone or the World ID Simulator), which is a human step I can't substitute for
 - [ ] **B5.2** Valid proof → record a `HumanApproval` (nullifier + enrolled operator) against the
       open `human_gate` · 45m · needs: B5.1, H0.5
 - [ ] **B5.3** Wire C's `authz.ts` into the freeze branch: verdict + projected blast radius →
