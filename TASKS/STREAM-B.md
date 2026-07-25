@@ -38,8 +38,9 @@ Order below is the order to do it in. B2 starts early and runs in parallel with 
 - [x] **B0** Migrations applied + mesh seeded — 16 nodes, 25 edges, 16 telemetry rows, three
       operators. Re-run any time with `pnpm --filter @verimesh/agent seed` (idempotent: nodes upsert,
       edges are replaced) · done 14:05 · **A is unblocked**
-- [ ] **B1** Simulator tick → `telemetry` + `nodes.metrics` writes on an interval; fault injection
-      hook for scenarios · 60m · needs: B0 · unblocks: A2, C1
+- [x] **B1** Simulator tick → `telemetry` + `nodes.metrics` writes on an interval; fault injection
+      hook for scenarios · 60m · needs: B0 · unblocks: A2, C1 · done 16:37 · `packages/sim` ticks
+      on `AGENT_MODE=sim|full`; `setFaults`/`clearFaults`/`parseFaultEnv` give scenarios a hook
 
 ---
 
@@ -51,7 +52,8 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
       · **C prepped this 15:20:** the wallet is generated and written to `.env.local`
       (`node --env-file=.env.local contracts/wallet.mjs`, idempotent — it reports the existing key
       rather than replacing it). **Address `0x8f071E986582D664E97DDACAE3F14b414322eB0b`, balance 0.**
-      Faucet is the only human step left · **BLOCKED: needs a faucet drip** If it stalls, use
+      Faucet is the only human step left · **BLOCKED: needs a faucet drip — still 0 ETH as of
+      16:37, faucet claimed in progress** If it stalls, use
       **Arbitrum Sepolia** (`421614`) instead — identical code, take whichever funds first. Also
       confirm the exact Graph network slug (`base-sepolia` / `arbitrum-sepolia`) from the
       supported-networks page with **"Show Testnets"** toggled — a wrong slug fails at deploy · 15m
