@@ -122,24 +122,74 @@ the endpoint in later. Ask B for a fixture at 15:00 if the spike is still runnin
 
 ## Sat 18:00 → 21:00 · panels (plan §8 A3, A4)
 
-- [ ] **A3.1** Reasoning trace panel — streaming steps: telemetry → detect → **history** → propose →
-      verify → commit/freeze · 60m · needs: A1.5
-- [ ] **A3.2** Event log — `events` table, newest first, colour-coded by type · 30m · needs: A1.5
-- [ ] **A4.1** Node inspector — click a node → metrics, operator, status, recent telemetry sparkline
-      · 45m · needs: A2.1
-- [ ] **A4.2** Action menu — the fixed `ACTIONS` set, manual trigger for rehearsal · 30m · needs: A4.1
+- [x] **A3.1** Reasoning trace panel — streaming steps: telemetry → detect → **history** → propose →
+      verify → commit/freeze · 60m · needs: A1.5 · done 15:25
+      - `lib/trace.ts` derives the six-step cycle from the newest proposal plus its verdict, commit
+        and gate, and the events scoped to that node. Each step carries its own `idle`/`active`/
+        `done`/`blocked`/`failed` state, so the panel *streams* — a step lights up and starts pulsing
+        the moment its row lands, without waiting for the cycle to finish.
+      - the propose step renders the diagnosis, expected effect, a confidence bar, the risk flags and
+        a **0G Compute attestation badge** off `zerog_inference_valid`; verify renders the verdict and
+        the exact breached bound; resolve renders either the commit (0G root + registry tx) or the
+        freeze, with a **review authorization →** button straight into the quorum modal.
+- [x] **A3.2** Event log — `events` table, newest first, colour-coded by type · 30m · needs: A1.5 · done 15:25
+      - `eventColor` matches on substrings, so B can add event types without touching the frontend and
+        they still colour correctly. Rows are click-to-select-node and there is a
+        "only *this node*" filter that appears when a node is selected.
+- [x] **A4.1** Node inspector — click a node → metrics, operator, status, recent telemetry sparkline
+      · 45m · needs: A2.1 · done 15:25
+      - six live metrics, three sparklines (temp / load / throughput). The temp and load sparklines
+        **draw the blueprint bound as a dashed red rule** (`T_max`, `L_max` read from
+        `@verimesh/shared`'s blueprint) and the number turns amber/red as it crosses — you can see
+        the breach coming rather than reading it after the fact.
+      - a neighbours strip, where **cross-operator neighbours are outlined in the neighbour's own
+        operator colour** — the blast-radius question the tier depends on, answered inline.
+- [x] **A4.2** Action menu — the fixed `ACTIONS` set, manual trigger for rehearsal · 30m · needs: A4.1 · done 15:25
+      - all six `ACTIONS` from `@verimesh/shared`, posting to **`/api/rehearse`**, which writes a
+        proposal + verdict (+ a gate when it needs a human) marked `llm_provider: "rehearsal"` and
+        `risk_flags: ["rehearsal"]` so rehearsal rows are always distinguishable from real ones.
+      - ⚠️ the route's `rehearsalRequirement` is **deliberately not the real policy** — it is a local
+        stand-in that reads the edge table for cross-operator neighbours so A can rehearse the T1 and
+        T2 modals before C lands `authz.ts`. It is named for that. **When C ships `requireAuthorization`,
+        this function should be deleted and the route should call the real one.**
 
 ---
 
 ## Sat 20:00 → 23:00 · The Graph views (plan §8 A3.5, A5) — **the Graph track's UI**
 
-- [ ] **A3.5.1** GraphQL client (plain `fetch` is fine) against `SUBGRAPH_URL` · 20m · needs: B2.6
-- [ ] **A3.5.2** **Per-operator decision history** — query the subgraph by `operator`, filterable by
-      `verdict` · 45m · needs: A3.5.1
-- [ ] **A3.5.3** **Incident timeline** per node · 30m · needs: A3.5.1
-- [ ] **A3.5.4** ◈ **"the agent cited this" panel** — surface the exact `get_history` result the LLM
+- [x] **A3.5.1** GraphQL client (plain `fetch` is fine) against `SUBGRAPH_URL` · 20m · needs: B2.6
+      · done 15:25 · **not blocked after all — see below**
+      - `lib/subgraph.ts` holds all five queries as exported strings (so A5.2 can show the literal
+        text judges could run) and a `gql()` helper returning
+        `{data, source: "live"|"fixture", error, queryText, variables, endpoint, ms}`.
+      - **B2.6 never blocked this.** `lib/subgraphFixture.ts` is a fixture shaped *exactly* like
+        `subgraph/schema.graphql` — `Decision`/`Freeze`/`Approval`/`Override`/`HumanAuthority`/
+        `NodeHistory`, `ts` as a seconds string, ids as `bytes32` hex, and a node→operator map matching
+        the blueprint. `gql()` falls back to it when `NEXT_PUBLIC_SUBGRAPH_URL` is unset **or when a
+        live query throws**, so the whole Graph track is built and demoable now and **nothing changes
+        when B pastes the URL in** — the env loader already mirrors `SUBGRAPH_URL` into
+        `NEXT_PUBLIC_SUBGRAPH_URL`.
+      - every view shows a **`subgraph · Nms`** or **`fixture`** badge plus the endpoint, so we can
+        never accidentally demo a fixture believing it is live.
+- [x] **A3.5.2** **Per-operator decision history** — query the subgraph by `operator`, filterable by
+      `verdict` · 45m · needs: A3.5.1 · done 15:25
+      - opA/opB/opC switch + all/VERIFIED/VIOLATION/ESCALATE filter; each row shows the tier chip,
+        autonomous-vs-human-authorized, and the registry tx, and opens the audit drawer.
+- [x] **A3.5.3** **Incident timeline** per node · 30m · needs: A3.5.1 · done 15:25
+      - follows the mesh selection, and heads with the `NodeHistory` counters
+        (`incidentCount` / `violationCount`) — the same numbers the ✦ history-escalated tier reads,
+        so a repeat offender is visible before the policy escalates on it.
+- [x] **A3.5.4** ◈ **"the agent cited this" panel** — surface the exact `get_history` result the LLM
       had in context, inline in the trace. Judges must *see* the memory being consulted, not just
-      hear it claimed · 45m · needs: A3.1, B6.2
+      hear it claimed · 45m · needs: A3.1, B6.2 · done 15:25
+      - renders inline in the `get_history` trace step, with a **show query** toggle that reveals the
+        literal GraphQL that produced it.
+      - 📌 **CONTRACT FOR B (B6.2):** the panel reads the newest `events` row whose `type` contains
+        `history`. Put the `get_history` result in `message`:
+        **as JSON** (an array of `HistoryEntry` from `@verimesh/shared`, or `{entries:[…]}`) → it
+        renders as structured rows (node · operator · action · verdict · outcome · time);
+        **as plain text** → it renders verbatim in a `<pre>`. Both paths already work, so *anything*
+        you write shows up — JSON just looks materially better on stage. Nothing else is needed.
 - [ ] **A5.1** **Audit drawer** — click any decision → live GraphQL query → the indexed record,
       the 0G Storage blob, the registry tx (Basescan link), ✦ the distinct signers and the tier · 60m
       · needs: A3.5.1

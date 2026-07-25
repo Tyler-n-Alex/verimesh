@@ -31,6 +31,10 @@ export interface MeshEdge {
   crossOperator: boolean;
 }
 
+export type AuditTarget =
+  | { kind: "proposal"; proposalId: number }
+  | { kind: "decision"; decisionId: string };
+
 export interface MeshState {
   link: LinkState;
   linkError: string | null;
@@ -50,7 +54,7 @@ export interface MeshState {
 
   selectedNodeId: string | null;
   activeGateId: number | null;
-  auditProposalId: number | null;
+  auditTarget: AuditTarget | null;
 
   setLink: (link: LinkState, error?: string | null) => void;
   hydrate: (payload: {
@@ -78,7 +82,7 @@ export interface MeshState {
 
   selectNode: (id: string | null) => void;
   openGate: (id: number | null) => void;
-  openAudit: (proposalId: number | null) => void;
+  openAudit: (target: AuditTarget | null) => void;
 }
 
 function byTsDesc<T extends { ts: number; id: number }>(a: T, b: T): number {
@@ -129,7 +133,7 @@ export const useMeshStore = create<MeshState>((set) => ({
 
   selectedNodeId: null,
   activeGateId: null,
-  auditProposalId: null,
+  auditTarget: null,
 
   setLink: (link, error = null) => set({ link, linkError: error }),
 
@@ -268,7 +272,7 @@ export const useMeshStore = create<MeshState>((set) => ({
 
   selectNode: (id) => set({ selectedNodeId: id }),
   openGate: (id) => set({ activeGateId: id }),
-  openAudit: (proposalId) => set({ auditProposalId: proposalId }),
+  openAudit: (target) => set({ auditTarget: target }),
 }));
 
 function mapEdges(rows: EdgeRow[], nodes: Record<string, MeshNode>): MeshEdge[] {

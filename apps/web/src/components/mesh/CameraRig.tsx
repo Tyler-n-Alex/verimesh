@@ -26,7 +26,7 @@ export function CameraRig({
 
     const aspect = size.width / Math.max(1, size.height);
     const widen = aspect < 1.25 ? 1.25 / aspect : 1;
-    const distance = radius * 2.32 * widen;
+    const distance = radius * 2.5 * widen;
 
     target.set(center[0], center[1], center[2]);
     camera.position
