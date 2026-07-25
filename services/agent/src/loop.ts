@@ -18,6 +18,7 @@ import {
   storageFromEnv,
   toHistoryEntries,
   uploadBlob,
+  withRetry,
   type ObservationPayload,
 } from "@verimesh/chain";
 import {
@@ -48,14 +49,19 @@ async function fetchHistory(
   operator: string
 ): Promise<ReturnType<typeof toHistoryEntries>> {
   if (HISTORY_VIA_MCP) {
-    const res = await fetch(`${MCP_ENDPOINT}/get_history`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ nodeId, operator }),
-    });
-    if (!res.ok) throw new Error(`MCP get_history HTTP ${res.status}`);
-    const body = (await res.json()) as { entries: ReturnType<typeof toHistoryEntries> };
-    return body.entries ?? [];
+    return withRetry(
+      async () => {
+        const res = await fetch(`${MCP_ENDPOINT}/get_history`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ nodeId, operator }),
+        });
+        if (!res.ok) throw new Error(`MCP get_history HTTP ${res.status}`);
+        const body = (await res.json()) as { entries: ReturnType<typeof toHistoryEntries> };
+        return body.entries ?? [];
+      },
+      { label: "mcp-get-history", attempts: 2, timeoutMs: 10_000 }
+    );
   }
 
   if (!SUBGRAPH_URL) return [];

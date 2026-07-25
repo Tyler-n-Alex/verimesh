@@ -3,7 +3,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ethers } from "ethers";
 import { AUTH_TIER_CODE, type AuthTier } from "@verimesh/shared";
-import { withRetry } from "./retry";
+import { withTimeout } from "./retry";
+
+const CHAIN_CALL_TIMEOUT_MS = 30_000;
 
 let queue = Promise.resolve();
 
@@ -52,25 +54,28 @@ export async function commitDecision(
 ): Promise<string | undefined> {
   if (!config.address || !config.privateKey) return undefined;
 
-  return send(async () => {
-    const registry = getContract(config);
-    const idBytes = ethers.id(params.id);
-    const rootBytes = params.zerogRoot.startsWith("0x")
-      ? params.zerogRoot
-      : ethers.id(params.zerogRoot);
+  return withTimeout(
+    send(async () => {
+      const registry = getContract(config);
+      const idBytes = ethers.id(params.id);
+      const rootBytes = params.zerogRoot.startsWith("0x")
+        ? params.zerogRoot
+        : ethers.id(params.zerogRoot);
 
-    const tx = await registry.commitDecision(
-      idBytes,
-      params.nodeId,
-      params.operator,
-      params.action,
-      params.verdict,
-      AUTH_TIER_CODE[params.authTier],
-      rootBytes.length === 66 ? rootBytes : ethers.ZeroHash
-    );
-    const receipt = await tx.wait();
-    return receipt?.hash as string | undefined;
-  }).catch(() => undefined);
+      const tx = await registry.commitDecision(
+        idBytes,
+        params.nodeId,
+        params.operator,
+        params.action,
+        params.verdict,
+        AUTH_TIER_CODE[params.authTier],
+        rootBytes.length === 66 ? rootBytes : ethers.ZeroHash
+      );
+      const receipt = await tx.wait();
+      return receipt?.hash as string | undefined;
+    }),
+    CHAIN_CALL_TIMEOUT_MS
+  ).catch(() => undefined);
 }
 
 export interface FreezeParams {
@@ -88,20 +93,23 @@ export async function freezeNode(
 ): Promise<string | undefined> {
   if (!config.address || !config.privateKey) return undefined;
 
-  return send(async () => {
-    const registry = getContract(config);
-    const idBytes = ethers.id(params.id);
-    const tx = await registry.freezeNode(
-      idBytes,
-      params.nodeId,
-      params.operator,
-      params.reason,
-      AUTH_TIER_CODE[params.requiredTier],
-      params.requiredQuorum
-    );
-    const receipt = await tx.wait();
-    return receipt?.hash as string | undefined;
-  }).catch(() => undefined);
+  return withTimeout(
+    send(async () => {
+      const registry = getContract(config);
+      const idBytes = ethers.id(params.id);
+      const tx = await registry.freezeNode(
+        idBytes,
+        params.nodeId,
+        params.operator,
+        params.reason,
+        AUTH_TIER_CODE[params.requiredTier],
+        params.requiredQuorum
+      );
+      const receipt = await tx.wait();
+      return receipt?.hash as string | undefined;
+    }),
+    CHAIN_CALL_TIMEOUT_MS
+  ).catch(() => undefined);
 }
 
 export interface ResolveParams {
@@ -117,23 +125,26 @@ export async function resolveOverride(
 ): Promise<string | undefined> {
   if (!config.address || !config.privateKey) return undefined;
 
-  return send(async () => {
-    const registry = getContract(config);
-    const idBytes = ethers.id(params.id);
-    const nullifierBytes = params.nullifiers.map((n) => {
-      if (n.startsWith("0x") && n.length === 66) return n;
-      return ethers.zeroPadValue(ethers.toBeHex(BigInt(n)), 32);
-    });
+  return withTimeout(
+    send(async () => {
+      const registry = getContract(config);
+      const idBytes = ethers.id(params.id);
+      const nullifierBytes = params.nullifiers.map((n) => {
+        if (n.startsWith("0x") && n.length === 66) return n;
+        return ethers.zeroPadValue(ethers.toBeHex(BigInt(n)), 32);
+      });
 
-    const tx = await registry.resolveOverride(
-      idBytes,
-      params.chosenAction,
-      nullifierBytes,
-      params.operators
-    );
-    const receipt = await tx.wait();
-    return receipt?.hash as string | undefined;
-  }).catch(() => undefined);
+      const tx = await registry.resolveOverride(
+        idBytes,
+        params.chosenAction,
+        nullifierBytes,
+        params.operators
+      );
+      const receipt = await tx.wait();
+      return receipt?.hash as string | undefined;
+    }),
+    CHAIN_CALL_TIMEOUT_MS
+  ).catch(() => undefined);
 }
 
 export function registryFromEnv(): RegistryConfig | null {

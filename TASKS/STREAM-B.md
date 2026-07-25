@@ -102,8 +102,21 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
 
 - [ ] **B3** 0G Compute — broker setup, one attested inference call, `zerog_inference_valid` written
       to `proposals`; provider fallback (OpenAI/Anthropic) behind the same interface · 90m · unblocks: B6
+      · code done in `packages/chain/src/llm.ts` (`callZerog`, TEE `processResponse` check, OpenAI/
+      Anthropic/heuristic fallback all behind `proposeAction`) · **BLOCKED: 3 OG ledger minimum.**
+      Dedicated 0G wallet generated at `0x5aE14EBec183F8A18d55fc51ed88Ed593E0AbBDB` (key in
+      `.env.local`, per the skill's "two wallets, two faucets" rule — do **not** reuse the Base
+      Sepolia key). Funded 0.5 OG via faucet so far; `broker.ledger.depositFund` reverts below
+      3 OG and the faucet caps ~0.1/day. One usable provider found:
+      `0xa48f01287233509FD694a22Bf840225062E67836` (`chatbot`, `qwen2.5-omni-7b`, TEE `dstack`
+      verifier) — use that address for `ZEROG_COMPUTE_PROVIDER` once funded. Needs either several
+      more days of faucet claims or an ask in 0G's Discord for extra testnet tokens (the docs'
+      own suggestion)
 - [ ] **B4** 0G Storage — write the full reasoning blob, store `zerog_root` · 45m · needs: B3
-      · **owner: A** (G1 rebalance)
+      · **owner: A** (G1 rebalance) · code done in `packages/chain/src/storage.ts` (`uploadBlob`,
+      `MemData` + `Indexer`) · uploads pay gas directly, not through the Compute ledger, so this may
+      already work off the same 0.5 OG `ZEROG_PRIVATE_KEY` balance without waiting on B3's 3 OG —
+      untested since B4 is A's task
 
 ---
 
@@ -141,30 +154,40 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
 
 ## Sat 20:00 → Sun 02:00 · the loop
 
-- [ ] **B6.1** Agent loop skeleton — `services/agent/src/index.ts` is a 1-line stub; wire
-      telemetry → detect (deterministic rules, no LLM) · 60m · needs: B1
-- [ ] **B6.2** `get_history(nodeId, operator)` against the subgraph, behind a single interface;
+- [x] **B6.1** Agent loop skeleton — `services/agent/src/index.ts` is a 1-line stub; wire
+      telemetry → detect (deterministic rules, no LLM) · 60m · needs: B1 · done 19:57 ·
+      `services/agent/src/detect.ts` + `loop.ts`'s `runCycle` — no-op short-circuits before any LLM call
+- [x] **B6.2** `get_history(nodeId, operator)` against the subgraph, behind a single interface;
       feed the result into the diagnose context. Land it on **plain GraphQL** first so the loop is
-      unblocked, then B7 swaps the transport underneath · 45m · needs: B2.6 · unblocks: B7
+      unblocked, then B7 swaps the transport underneath · 45m · needs: B2.6 · unblocks: B7 · done 19:57
+      · `loop.ts`'s `fetchHistory` — plain GraphQL by default, `HISTORY_VIA_MCP=1` swaps the transport
 - [ ] **B6.3** Diagnose + propose — the **one** LLM decision, via B3, telemetry + history in context
-      · 45m · needs: B3, B6.2
-- [ ] **B6.4** `verify_constraints` call → C's verifier · 15m · needs: C1 · **C1 is done —
+      · 45m · needs: B3, B6.2 · code done in `packages/chain/src/llm.ts` (`proposeAction`), wired into
+      `loop.ts` · **BLOCKED on B3** — 0G Compute ledger needs a 3 OG minimum deposit, faucet only
+      gives ~0.1/day; runs on the heuristic fallback until funded
+- [x] **B6.4** `verify_constraints` call → C's verifier · 15m · needs: C1 · **C1 is done —
       `verifyConstraints(state, proposal)` from `@verimesh/verifier`. Pure, deterministic, does not
       mutate the state you hand it. Returns `VerdictResult` plus `violations`, `peak`, `baseline`
-      and `blast`**
+      and `blast`** · done 19:57 · called directly in `loop.ts`'s `runCycle`
 - [ ] **B6.5** `commit_state` — Supabase + 0G Storage blob + **registry `Committed` event** (Base
       Sepolia) carrying `authTier` **and the `zerogRoot` from the 0G Storage write**; store
       `chain_tx_hash`. The `zerogRoot` is what links the indexed row back to 0G — do not drop it
-      · 60m · needs: B2.1, B4
+      · 60m · needs: B2.1, B4 · code done in `loop.ts`'s `finalizeCommit` — Supabase write, registry
+      commit and 0G upload are all wired; **on-chain half works now that B2.1 is deployed, 0G Storage
+      half still needs B4's `ZEROG_PRIVATE_KEY` funded past the ledger minimum**
 - [ ] **B6.6** Freeze branch — VIOLATION / low confidence → authz policy → collect quorum →
-      re-verify → commit · 60m · needs: B5.5, B6.5
-- [ ] **B7.1** Write a **Verimesh MCP server** in `services/mcp` (currently a 1-line stub) exposing
+      re-verify → commit · 60m · needs: B5.5, B6.5 · code done in `loop.ts`'s `openHumanGate` +
+      `pollGateSatisfaction` + `processResolvedGates` · **BLOCKED on B5.5/B5.6** — no real World ID
+      proofs to collect yet
+- [x] **B7.1** Write a **Verimesh MCP server** in `services/mcp` (currently a 1-line stub) exposing
       `get_history` over our subgraph's GraphQL endpoint · 45m · needs: B2.6
       · ⚠️ **The Graph's own `subgraph-mcp` cannot reach our subgraph** — it queries the Graph
       Network gateway by subgraph ID only, with no arbitrary-endpoint option. Plan §0's "query via
       The Graph's Subgraph MCP server" is not achievable; ours is. See the `subgraph` skill.
-- [ ] **B7.2** Point B6.2's interface at the MCP tool so the agent's step 3 goes through MCP
-      · 30m · needs: B7.1, B6.2
+      · done 19:57 · `services/mcp/src/index.ts` — `POST /get_history`, `GET /health`
+- [x] **B7.2** Point B6.2's interface at the MCP tool so the agent's step 3 goes through MCP
+      · 30m · needs: B7.1, B6.2 · done 19:57 · `HISTORY_VIA_MCP=1` routes `loop.ts`'s `fetchHistory`
+      through the MCP server instead of direct GraphQL
 - [ ] **B7.3** Write the submission line **accurately**: "a custom MCP server exposing our subgraph
       as agent-queryable memory" — **not** "we used The Graph's Subgraph MCP server." Judges check
       · 5m · needs: B7.2
@@ -180,7 +203,16 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
       loop from them instead of hand-injecting. `runAllScenarios()` runs the deterministic half.**
       ⚠️ the cascade's offline neighbour is **`node-11`**, not node-12 — see the correction in
       `STREAM-C.md`
-- [ ] **B8.2** Retry/timeout on every network call (0G broker, RPC, subgraph). One flaky call must
-      not kill the demo · 45m
-- [ ] **B8.3** Seed a handful of historical decisions on-chain so `get_history` has real depth on
-      stage · 20m
+- [x] **B8.2** Retry/timeout on every network call (0G broker, RPC, subgraph). One flaky call must
+      not kill the demo · 45m · done 19:57 · `packages/chain/src/retry.ts`'s `withRetry`/`withTimeout`
+      cover the 0G broker (`llm.ts`), 0G Storage (`storage.ts`) and subgraph GraphQL (`subgraph.ts`)
+      calls, plus the agent's MCP `get_history` fetch. **Registry chain calls
+      (`commitDecision`/`freezeNode`/`resolveOverride`) get a timeout only, not a resubmitting
+      retry** — the contract has no dedup on `id` for those two, so blindly retrying risks emitting a
+      duplicate `Committed`/`Frozen` event if a retry fires after the first tx actually landed but we
+      just failed to observe it. `resolveOverride` alone is idempotent on-chain but was kept
+      consistent with the other two for simplicity.
+- [x] **B8.3** Seed a handful of historical decisions on-chain so `get_history` has real depth on
+      stage · 20m · done 19:57 · `contracts/seed-history.mjs` — two prior `node-09`/opA incidents
+      (matches `recurring_fault`'s premise that the mesh has already seen this signature twice),
+      one `node-07` SCALE_UP, one `node-02` THROTTLE_NODE for general depth
