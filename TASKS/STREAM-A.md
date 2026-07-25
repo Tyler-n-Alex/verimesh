@@ -200,16 +200,76 @@ the endpoint in later. Ask B for a fixture at 15:00 if the spike is still runnin
 
 ## Sat 21:00 → Sun 01:00 · ✦ World ID + the quorum modal (plan §8 A3.6)
 
-- [ ] **B5.1** *(picked up)* `/api/worldid/sign` (RP context via `signRequest` from
+- [x] **B5.1** *(picked up)* `/api/worldid/sign` (RP context via `signRequest` from
       `@worldcoin/idkit-core/signing`) + `/api/worldid/verify` (POST
-      `developer.world.org/api/v4/verify/{rp_id}`) · 45m · unblocks: A3.6.1
-- [ ] **A3.6.1** IDKit widget wired to those routes; one successful scan end-to-end · 45m · needs: B5.1
-- [ ] **A3.6.2** **Freeze modal, T1** — renders the required tier, a single slot, and the
-      operator-allowlist check · 45m · needs: A3.6.1, B5.4
-- [ ] **A3.6.3** **Freeze modal, T2 quorum tracker** — two slots, "Operator A ✅ · Operator B ⬜ —
+      `developer.world.org/api/v4/verify/{rp_id}`) · 45m · unblocks: A3.6.1 · done 16:00
+      - 🔧 **two corrections to the `world-id` skill, both would have silently broken the scan** —
+        skill file updated:
+        1. `signRequest()` returns **camelCase** `createdAt` / `expiresAt`, but the `RpContext` the
+           widget consumes wants **snake_case** `created_at` / `expires_at`. The skill's snippet reads
+           `sig.created_at`, which is `undefined` — the widget would refuse to open with no useful
+           error. The route maps between them explicitly.
+        2. `signRequest({signingKeyHex, action})` **signs the action**, so the widget's `action` prop
+           must be byte-identical or the proof is invalid. `/api/worldid/sign` therefore **returns the
+           `action` it signed** and the widget uses that value rather than reading env itself. One
+           less way to fail at 3am.
+      - `/api/worldid/verify` never trusts the client: the nullifier is taken from **our** call to the
+        World verifier, then run through `normalizeNullifier` before it touches the database.
+        It enforces, in order: gate still pending → signer is on a **required operator's** allowlist →
+        **not a repeat nullifier** (`distinctNullifiers`, never `===`) → insert → recompute the
+        quorum. The Postgres unique-index violation (`23505`) is mapped to the same
+        `DUPLICATE_NULLIFIER` rejection, so the app-level and database-level checks surface
+        identically. **Verified against the live DB: the second insert of the same nullifier returns
+        `23505`.**
+      - 📌 **for B (B5.6 enrolment):** `authz_config.json`'s operator arrays are still empty. While
+        *every* array is empty, or with `WORLDID_ALLOW_SELF_ENROLL=true`, the route accepts an
+        unenrolled human and returns `{nullifier, enrolledFor: [], selfEnrolled: true}` — **scan once
+        with each demo phone, copy the two `nullifier` values straight into `authz_config.json`**, and
+        the allowlist check becomes live automatically with no code change. Make sure both arrays are
+        populated before the demo, or T1/T2 will accept anyone.
+      - 📌 **seam with B5.4/B5.5:** when the quorum is satisfied the route sets
+        `human_gates.status = "authorized"` and emits an `override` event. **B still owns turning that
+        into the on-chain `resolveOverride` + commit** — this route deliberately does not touch a chain.
+- [x] **A3.6.1** IDKit widget wired to those routes; one successful scan end-to-end · 45m · needs: B5.1
+      · done 16:00 · ⚠️ **needs credentials to close out — see below**
+      - `components/worldid/WorldIdScan.tsx` mints the `rp_context` **when the button is pressed**, not
+        at page load, so it cannot be expired by the time a judge scans. `signal` is bound to
+        `gate-${gateId}`, so a proof from an earlier freeze cannot be replayed into a later one.
+      - the full path is wired and typechecked against the real IDKit 4.2.1 surface, and the route
+        degrades to a clear **"World ID is not configured: missing NEXT_PUBLIC_WORLDID_APP_ID, …"**
+        message rather than a dead button.
+      - 🚨 **BLOCKED on credentials, not on code:** `NEXT_PUBLIC_WORLDID_APP_ID`, `WORLDID_RP_ID` and
+        `WORLDID_SIGNING_KEY` are **all still empty in `.env.local`**. The literal "one successful scan
+        end-to-end" cannot be ticked until those are filled in from the Developer Portal. Everything
+        downstream of the scan is already proven with real database rows.
+- [x] **A3.6.2** **Freeze modal, T1** — renders the required tier, a single slot, and the
+      operator-allowlist check · 45m · needs: A3.6.1, B5.4 · done 16:00
+      - one slot, labelled with the operator, and copy that names the distinction explicitly: World ID
+        proves this is *a* unique human, the allowlist proves it is *the right one*. A
+        `NOT_ON_ALLOWLIST` rejection renders as its own state naming the operator it needed.
+- [x] **A3.6.3** **Freeze modal, T2 quorum tracker** — two slots, "Operator A ✅ · Operator B ⬜ —
       1 of 2 authorized", each filled by a *distinct* scan, and the plain-English reason
       ("isolating **opA**'s node-07 would breach **opB**'s node-12") · 75m · needs: A3.6.2, B5.5
-      · **this is the money shot — give it real polish**
+      · **this is the money shot — give it real polish** · done 16:00
+      - **verified at 0-of-2, 1-of-2 and 2-of-2 against real `human_approvals` rows.** Slots fill
+        independently, each showing the distinct nullifier that filled it and the time; the counter
+        reads "N of 2 authorized"; the CTA **relabels itself to "scan as opB"** once opA has signed, so
+        the person holding the second phone is told what to do.
+      - the reason string is parsed and the **operator names are coloured with the same hues the 3D
+        mesh uses**, so "isolating opA's node-07 would breach opB's node-12" ties directly to the
+        boundary on screen.
+      - a repeat scan renders **"REJECTED — SAME HUMAN CANNOT COUNT TWICE"**, which is the World
+        differentiator stated out loud at the moment it is enforced.
+      - the footer states *"the agent cannot proceed until this is satisfied"* while pending, then flips
+        to *"2 distinct humans authorized — releasing to commit"*.
+      - ⚠️ **HeroUI v3's `Modal` was tried and dropped for this one surface.** It is built on React
+        Aria's `DialogTrigger`, so it expects a pressable trigger child; driven programmatically from a
+        realtime gate row it warned `PressResponder was rendered without a pressable child` and its
+        `Modal.Container` overrode the width. `components/ui/Overlay.tsx` replaces it — same
+        `role="dialog"`/`aria-modal`/labelling, Escape-to-close, Tab-cycle containment and
+        focus restore. HeroUI stays installed and its style layer is active; the console's surfaces are
+        deliberately hand-built because they are all bespoke data displays, and **the one screen the
+        whole World track rests on should not depend on a component fighting its own trigger model.**
 - [ ] **A3.6.4** ✦ **Authz ledger** in the audit views, from the subgraph — per decision: which
       distinct nullifiers signed + the tier; per human: remaining override budget · 45m
       · needs: A3.5.1, B5.7

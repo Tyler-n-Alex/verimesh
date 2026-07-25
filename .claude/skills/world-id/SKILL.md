@@ -42,28 +42,47 @@ Two more v4 changes that will bite:
 
 `process.env.WORLDID_SIGNING_KEY` is already in `.env.example`. It **never** reaches the client.
 
+> ✅ **Verified against `@worldcoin/idkit-core@4.2.2` / `@worldcoin/idkit-server@1.1.1`, 25 Jul 16:00.**
+> Two traps, both silent — an earlier revision of this file had them wrong:
+>
+> 1. **`signRequest()` returns camelCase; `RpContext` wants snake_case.** The return type is
+>    `{sig, nonce, createdAt, expiresAt}`, but the `rp_context` the widget consumes is
+>    `{rp_id, nonce, created_at, expires_at, signature}`. Reading `sig.created_at` yields
+>    `undefined` and **the widget simply refuses to open**, with nothing useful in the console.
+>    Map the names explicitly, as below.
+> 2. **`action` is part of the signed message.** `signRequest({signingKeyHex, action})` hashes the
+>    action into the payload, so the widget's `action` prop must match byte for byte. **Return the
+>    action from this route and have the client use that value** rather than reading env separately —
+>    otherwise a stray edit to `WORLDID_ACTION` produces an invalid proof and a mystery failure.
+
 ```ts
 import { signRequest } from "@worldcoin/idkit-core/signing";
 
 export async function POST() {
-  const action = process.env.WORLDID_ACTION!;
+  const action = process.env.WORLDID_ACTION ?? "verimesh-authorize";
   const sig = signRequest({
     signingKeyHex: process.env.WORLDID_SIGNING_KEY!,
     action,
   });
 
   return Response.json({
-    rp_id: process.env.WORLDID_RP_ID!,
-    nonce: sig.nonce,
-    created_at: sig.created_at,
-    expires_at: sig.expires_at,
-    signature: sig.sig,
+    app_id: process.env.NEXT_PUBLIC_WORLDID_APP_ID!,
+    action,
+    rp_context: {
+      rp_id: process.env.WORLDID_RP_ID!,
+      nonce: sig.nonce,
+      created_at: sig.createdAt,
+      expires_at: sig.expiresAt,
+      signature: sig.sig,
+    },
   });
 }
 ```
 
 The signed context is short-lived. Fetch it when the freeze modal opens, not at page load — a
 context minted at boot will be expired by the time a judge scans.
+
+Live implementation: [`apps/web/src/app/api/worldid/sign/route.ts`](../../../apps/web/src/app/api/worldid/sign/route.ts).
 
 ## Backend — proof verification
 
@@ -95,25 +114,34 @@ import { IDKitRequestWidget, orbLegacy } from "@worldcoin/idkit";
 <IDKitRequestWidget
   open={open}
   onOpenChange={setOpen}
-  app_id={process.env.NEXT_PUBLIC_WORLDID_APP_ID!}
-  action="verimesh-authorize"
+  app_id={appId as `app_${string}`}
+  action={signedAction}
   rp_context={rpContext}
-  allow_legacy_proofs={true}
-  preset={orbLegacy({ signal: gateId })}
+  allow_legacy_proofs
+  preset={orbLegacy({ signal: `gate-${gateId}` })}
   handleVerify={async (result) => {
     const res = await fetch("/api/worldid/verify", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ rp_id: rpContext.rp_id, idkitResponse: result }),
+      body: JSON.stringify({ rp_id: rpContext.rp_id, gateId, idkitResponse: result }),
     });
     if (!res.ok) throw new Error("verification failed");
   }}
-  onSuccess={() => refreshGate()}
+  onSuccess={() => setOpen(false)}
 />
 ```
 
 Set `signal` to the **gate id**. It binds the proof to this specific freeze — without it a proof
 from an earlier gate can be replayed into a later one.
+
+Three typing notes from the real 4.2.1 surface:
+- `app_id` is typed `` `app_${string}` ``, so a plain `string` from env will not assign. Check
+  `appId.startsWith("app_")` and cast — that also catches an empty env var before the widget opens.
+- `signedAction` must be the action the **backend signed** (see above), not a second read of env.
+- `handleVerify` should **throw** on failure. IDKit keeps the widget open and surfaces the error;
+  returning normally makes a rejected proof look successful.
+
+Live implementation: [`apps/web/src/components/worldid/WorldIdScan.tsx`](../../../apps/web/src/components/worldid/WorldIdScan.tsx).
 
 ## The Verimesh-specific part — differential authorization
 
