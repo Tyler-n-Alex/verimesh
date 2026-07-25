@@ -8,6 +8,7 @@ import {
 } from "@verimesh/shared";
 import {
   authorizationTraceCheck,
+  policyEnforcementCheck,
   quorumTruthCheck,
   runAcceptance,
   subgraphTruthCheck,
@@ -251,22 +252,30 @@ describe("C5.2 · quorum-truth check", () => {
   });
 });
 
+const ENROLLED = {
+  operators: { opA: [NULLIFIER_A], opB: [NULLIFIER_B] },
+  budgetPerWindow: 3,
+  windowMs: 3_600_000,
+};
+
 describe("C5.3 · the harness verdict", () => {
-  it("is green only when both checks are green", async () => {
+  it("is green only when every check is green", async () => {
     const green = await runAcceptance(
       { decisions: [committed], gates: [gate] },
       stub({
         decisions: [indexedDecision],
         approvals: indexedApprovals,
         overrides: [indexedOverride],
-      })
+      }),
+      ENROLLED
     );
     expect(green.ok).toBe(true);
-    expect(green.results).toHaveLength(3);
+    expect(green.results).toHaveLength(5);
 
     const red = await runAcceptance(
       { decisions: [committed], gates: [gate] },
-      stub({ decisions: [indexedDecision], approvals: indexedApprovals })
+      stub({ decisions: [indexedDecision], approvals: indexedApprovals }),
+      ENROLLED
     );
     expect(red.ok).toBe(false);
     expect(red.red).toHaveLength(1);
@@ -278,10 +287,11 @@ describe("C5.3 · the harness verdict", () => {
     };
     const report = await runAcceptance(
       { decisions: [committed], gates: [gate] },
-      failing
+      failing,
+      ENROLLED
     );
     expect(report.ok).toBe(false);
-    expect(report.red).toHaveLength(3);
+    expect(report.red).toHaveLength(5);
   });
 });
 
@@ -327,5 +337,83 @@ describe("C5.2 · authorization-trace check", () => {
     };
     const [result] = await authorizationTraceCheck(goodFetch);
     expect(result.ok).toBe(true);
+  });
+});
+
+describe("C5.2 · policy enforcement is checked against the chain, not asserted", () => {
+  const config = {
+    operators: { opA: [NULLIFIER_A], opB: [NULLIFIER_B] },
+    budgetPerWindow: 3,
+    windowMs: 3_600_000,
+  };
+
+  function enforcementFetch(
+    approvals: unknown[],
+    humanAuthorities: unknown[]
+  ): GraphQLFetch {
+    return async () => ({ approvals, humanAuthorities });
+  }
+
+  it("catches a human who signed for an operator they are not enrolled to", async () => {
+    const [allowlist] = await policyEnforcementCheck(
+      enforcementFetch(
+        [{ id: "1", decisionId: DECISION_ID, worldIdNullifier: NULLIFIER_A, operator: "opB" }],
+        []
+      ),
+      config
+    );
+    expect(allowlist.ok).toBe(false);
+    expect(allowlist.mismatches[0]).toContain("not enrolled");
+  });
+
+  it("refuses to pass when nobody is enrolled at all", async () => {
+    const [allowlist] = await policyEnforcementCheck(
+      enforcementFetch([], []),
+      { operators: { opA: [], opB: [] }, budgetPerWindow: 3, windowMs: 3_600_000 }
+    );
+    expect(allowlist.ok).toBe(false);
+    expect(allowlist.detail).toContain("B5.6");
+  });
+
+  it("passes when every signer was entitled", async () => {
+    const [allowlist] = await policyEnforcementCheck(
+      enforcementFetch(
+        [
+          { id: "1", decisionId: DECISION_ID, worldIdNullifier: NULLIFIER_A, operator: "opA" },
+          { id: "2", decisionId: DECISION_ID, worldIdNullifier: NULLIFIER_B, operator: "opB" },
+        ],
+        []
+      ),
+      config
+    );
+    expect(allowlist.ok).toBe(true);
+  });
+
+  it("catches a human who spent more overrides than the budget allows", async () => {
+    const [, budget] = await policyEnforcementCheck(
+      enforcementFetch([], [{ worldIdNullifier: NULLIFIER_A, overrideCount: 4 }]),
+      config
+    );
+    expect(budget.ok).toBe(false);
+    expect(budget.mismatches[0]).toContain("against a budget of 3");
+  });
+
+  it("passes a human sitting exactly on the budget", async () => {
+    const [, budget] = await policyEnforcementCheck(
+      enforcementFetch([], [{ worldIdNullifier: NULLIFIER_A, overrideCount: 3 }]),
+      config
+    );
+    expect(budget.ok).toBe(true);
+  });
+});
+
+describe("C5.3 · an unenrolled deployment is not green", () => {
+  it("fails on the real authz_config while its allowlists are empty", async () => {
+    const report = await runAcceptance(
+      { decisions: [], gates: [] },
+      stub({ approvals: indexedApprovals })
+    );
+    expect(report.ok).toBe(false);
+    expect(report.red.some((r) => r.check === "C5.2 allowlist-truth")).toBe(true);
   });
 });

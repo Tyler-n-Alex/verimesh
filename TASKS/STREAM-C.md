@@ -293,3 +293,41 @@ check circular and it would have passed for free.
   "one distinct human **per required operator**" half is reconstructed from the approvals and is
   therefore not independently checked. **Do not claim it is.** If B feeds the harness from
   `human_gates.operators_required` (H0.5) instead of the chain snapshot, that half becomes real.
+
+---
+
+## 20:50 — audit of how the running system uses the verifier and the policy
+
+The verifier and the policy are done and tested. **Whether the system actually calls them is a
+different question, and the answer is partly no.** Four findings; the harness now catches all four
+empirically rather than trusting that the wiring is right.
+
+**Wired and working — checked, not assumed:**
+- `verifyConstraints` + `affectedOperators` → `loop.ts:322,330` ✓
+- `requireAuthorization` → `loop.ts:328` ✓
+- **`incidentCount` comes from the subgraph for real** (`loop.ts:324` → `fetchAuthzContext`). I
+  suspected this was stubbed; it is not. **The memory beat is genuinely live.**
+- Duplicate-nullifier rejection: enforced in the verify route *and* by the DB unique index ✓
+
+**Not wired:**
+1. 🚨 **`resolveOverride` has no caller** outside `seed-event.mjs`, so a live T2 emits `Committed`
+   with `authTier: 2` and **no `HumanApproval` events**. The quorum never reaches the chain.
+2. 🚨 **The allowlist is bypassed right now** — `selfEnroll` is true whenever `authz_config` is
+   empty, and it is empty. Any verified human can authorize any gate for any operator.
+3. ⚠️ **`checkApproval` is never called** — the verify route reimplements it and **leaves out the
+   budget check**. `C4.2` property-tests a function nothing runs.
+4. ⚠️ **The budget is enforced nowhere** but *displayed* in `GraphPanel` from the subgraph. A limit
+   shown and not enforced is worse than no limit.
+
+**New acceptance checks (all in `C5.2`, all chain-vs-config so they are trustlessly auditable):**
+
+| Check | Catches |
+|---|---|
+| `authorization-trace` | a decision claiming `humanAuthorized` with no `HumanApproval` indexed — finding 1 |
+| `allowlist-truth` | an on-chain approval from a human not enrolled to that operator, **and** the "nobody is enrolled at all" case — findings 2 and 3 |
+| `budget-truth` | any `humanAuthorities.overrideCount` above `budgetPerWindow` — finding 4 |
+
+**Current state against the live chain: 12 of 14 green.** The two red are honest:
+`allowlist-truth` (nobody enrolled — B5.6) and `quorum-truth` (the only resolved override on-chain
+came from the seed script, so it has no `human_gates` row). Both go green on their own once B5.6 and
+a real gate exist. **82 tests.**

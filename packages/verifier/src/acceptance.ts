@@ -1,8 +1,11 @@
 import {
   AUTH_TIER_CODE,
+  authzConfig,
   distinctNullifiers,
+  isEnrolled,
   isSatisfied,
   normalizeNullifier,
+  type AuthzConfig,
   type AuthorizationRequirement,
   type DecisionRecord,
   type HumanApproval,
@@ -430,14 +433,97 @@ export async function authorizationTraceCheck(
   ];
 }
 
+export const POLICY_ENFORCEMENT_QUERY = `
+query PolicyEnforcement($first: Int = 500) {
+  approvals(first: $first) {
+    id
+    decisionId
+    worldIdNullifier
+    operator
+  }
+  humanAuthorities(first: $first) {
+    worldIdNullifier
+    overrideCount
+    operators
+  }
+}
+`;
+
+export async function policyEnforcementCheck(
+  fetchGql: GraphQLFetch,
+  config: AuthzConfig = authzConfig as AuthzConfig
+): Promise<CheckResult[]> {
+  let approvals: IndexedApproval[] = [];
+  let authorities: { worldIdNullifier: string; overrideCount: number }[] = [];
+
+  try {
+    const data = (await fetchGql(POLICY_ENFORCEMENT_QUERY, {})) as {
+      approvals?: IndexedApproval[];
+      humanAuthorities?: { worldIdNullifier: string; overrideCount: number }[];
+    };
+    approvals = data.approvals ?? [];
+    authorities = data.humanAuthorities ?? [];
+  } catch (err) {
+    const detail = `query failed: ${err instanceof Error ? err.message : String(err)}`;
+    return [
+      { check: "C5.2 allowlist-truth", subject: "all indexed approvals", ok: false, detail, mismatches: [] },
+      { check: "C5.2 budget-truth", subject: "all indexed humans", ok: false, detail, mismatches: [] },
+    ];
+  }
+
+  const enrolled = Object.values(config.operators).flat().length;
+
+  const offAllowlist = approvals.filter(
+    (approval) => !isEnrolled(config, approval.operator, approval.worldIdNullifier)
+  );
+
+  const allowlistResult: CheckResult = {
+    check: "C5.2 allowlist-truth",
+    subject: `${approvals.length} indexed approval(s)`,
+    ok: enrolled > 0 && offAllowlist.length === 0,
+    detail:
+      enrolled === 0
+        ? "authz_config has no enrolled nullifiers at all, so nothing on-chain can be shown to have been authorized by an entitled human (B5.6)"
+        : offAllowlist.length === 0
+          ? "every human recorded on-chain was enrolled to the operator they signed for"
+          : `${offAllowlist.length} on-chain approval(s) came from a human not on that operator's allowlist`,
+    mismatches: offAllowlist.map(
+      (approval) =>
+        `${approval.worldIdNullifier} signed for ${approval.operator} but is not enrolled to it`
+    ),
+  };
+
+  const overBudget = authorities.filter(
+    (authority) => authority.overrideCount > config.budgetPerWindow
+  );
+
+  const budgetResult: CheckResult = {
+    check: "C5.2 budget-truth",
+    subject: `${authorities.length} indexed human(s)`,
+    ok: overBudget.length === 0,
+    detail:
+      overBudget.length === 0
+        ? `no human exceeded the ${config.budgetPerWindow}-override budget`
+        : `${overBudget.length} human(s) authorized more overrides than the budget allows`,
+    mismatches: overBudget.map(
+      (authority) =>
+        `${authority.worldIdNullifier} has ${authority.overrideCount} overrides against a budget of ${config.budgetPerWindow}`
+    ),
+  };
+
+  return [allowlistResult, budgetResult];
+}
+
 export async function runAcceptance(
   input: AcceptanceInput,
-  fetchGql: GraphQLFetch
+  fetchGql: GraphQLFetch,
+  config: AuthzConfig = authzConfig as AuthzConfig
 ): Promise<AcceptanceReport> {
   const results = [
     ...(await subgraphTruthCheck(input.decisions, fetchGql)),
     ...(await quorumTruthCheck(input.gates, fetchGql)),
     ...(await authorizationTraceCheck(fetchGql)),
+    ...(await policyEnforcementCheck(fetchGql, config)),
   ];
   const red = results.filter((result) => !result.ok);
   return { ok: red.length === 0, results, red };
