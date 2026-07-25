@@ -279,6 +279,16 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
          video must not imply two humans scanned live.**
       ⚠️ `--auto-approve` can rehearse the T2 wiring but **must never be run on the demo machine**:
       it fabricates signers, and any run puts those nullifiers on-chain permanently
+      · ✅ **01:00 — decided: option 3. The live World beat is T1 `recurring_fault`.** A second
+      human is not obtainable before submission. Only **one** enrolment is needed now:
+      `pnpm --filter @verimesh/agent enrol opA <nullifier>` — opA, because `recurring_fault` is
+      `node-09`/opA and opA is also the cascade's first slot, so the same human fills what can be
+      filled in both scenarios. Verified against the live subgraph at 01:00 that the beat holds:
+      `node-09` returns `incidentCount: 2` and `REPEAT_OFFENDER_INCIDENTS` is 2, so the escalation
+      fires from real indexed history rather than from a constant — the World beat and the Graph
+      beat became the same beat, on a `VERIFIED` verdict. Run sheet amended, `SUBMISSION.md` has a
+      *what we demo live and what we do not* table, and the seeded `a11ce`/`0b0b` override is now
+      flagged there as seeded rather than sitting in the sample query looking like two people
 - [x] **B5.7** ✦ Subgraph-fed policy inputs (plan §9 B5 stretch, §1D) — before opening a gate, query
       the subgraph over **plain GraphQL** (not the agent's MCP tool — the one-LLM-decision invariant
       must hold) for: (a) the node's incident count → escalate the tier for a repeat offender,

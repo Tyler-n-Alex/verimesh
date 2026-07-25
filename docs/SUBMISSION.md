@@ -14,16 +14,37 @@ itself queries as trustless memory, and every reasoning blob is written immutabl
 
 ---
 
+## What we demo live, and what we do not — read this before writing a word of the writeup
+
+**Decided 01:00, and it is not negotiable at 04:00: the live World beat is T1.** We have exactly
+one World ID verified human available before submission. T2 requires two *distinct* nullifiers and
+the policy is not being relaxed to fit — a quorum of one is not a quorum, and that check is the
+entire World differentiator. So:
+
+| | |
+|---|---|
+| **Demoed live, end to end** | `recurring_fault` — the agent detects, queries the subgraph, cites two prior indexed incidents on `node-09`, the verifier returns **VERIFIED**, and the policy still demands a human **because the chain says repeat offender**. One real scan on a real phone, checked against the operator allowlist, then committed on-chain and indexed. |
+| **Built, tested, and shown — but not scanned live** | T2. The cascade freezes at T2 and stays frozen, which we show deliberately: the agent will not proceed without a second human it does not have. The quorum logic is property-tested, enforced by a unique index and by `revert DuplicateNullifier` on-chain. |
+| **Never say** | that two humans scanned live, or that the on-chain two-nullifier override was two people. It was seeded — see the ⚠️ under *To paste before submitting*. |
+
+The honest framing is stronger than the fudge: *"the agent stopped, and it is still stopped, because
+the second human isn't in the room. That is the point — it cannot talk itself past the requirement,
+and neither can we."*
+
 ## The two rehearsed booth lines (plan §1B)
 
 ### 1 · The "why does this need a blockchain?" kill-shot
 
 > "Because independent operators don't trust each other, the central API, or the AI. 0G makes the
 > record un-forgeable; The Graph makes it independently queryable by anyone; World proves a real
-> human authorized the exceptions — and for anything that crosses an operator boundary, that it was
+> human authorized the exceptions — and for anything that crosses an operator boundary, it demands
 > **two different** real humans, which is a thing no wallet and no login can prove. Remove them and
 > a multi-party network can't trust an AI's account of what it did, or reason over it. Our agent
 > literally queries that trustless memory before it acts."
+
+*"Demands", not "proved it was" — we ran the live scan at T1. If asked to show T2, show the frozen
+gate refusing to resolve on one human, the `revert DuplicateNullifier` in the contract, and the
+property suite. Do not point at the seeded override.*
 
 ### 2 · The memory line
 
@@ -108,10 +129,16 @@ pnpm --filter @verimesh/verifier acceptance -- --input ../../chain-snapshot.json
   }
   ```
 
-  It returns the two **distinct** nullifiers that authorized the override
-  (`0x…a11ce` / opA and `0x…0b0b` / opB), the resolved `SCALE_UP` with
-  `approvalsCollected: 2`, and `nodeHistories` showing `node-07` and `node-09` at
-  `incidentCount: 2` — the exact input the repeat-offender escalation reads.
+  It returns `nodeHistories` showing `node-07` and `node-09` at `incidentCount: 2` — the exact
+  input the repeat-offender escalation reads, live, on stage.
+
+  ⚠️ **It also returns one override carrying two nullifiers, `0x…a11ce` / opA and `0x…0b0b` / opB,
+  and those are seeded, not humans.** They are hand-written in `contracts/seed-event.mjs` — the hex
+  spells `a11ce` and `0b0b` — and they exist so the subgraph had all four event types to index
+  before the loop could produce any (`B2.2`). **Do not present that row as an authorization by two
+  people.** A judge who decodes it will read "alice" and "bob" and will be right to. If the query is
+  run on stage, say what it is: seeded events proving the pipeline indexes overrides, next to a real
+  decision the agent committed minutes earlier.
 - Registry address on Base Sepolia + Basescan links: **done (B2.1)** —
   `0x0Fb557580E7C01Aed5D02622558216B9eb19c33c`,
   <https://sepolia.basescan.org/address/0x0Fb557580E7C01Aed5D02622558216B9eb19c33c>

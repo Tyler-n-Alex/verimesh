@@ -76,6 +76,25 @@ dead demo. If it threw, that is a bug worth a Blockers row.
 
 ---
 
+> 🚨 **AMENDMENT 01:00 (B) — §2 and §3 swap places. The live World beat is now §3, T1.**
+> We have one World ID identity before submission, not two, so **§2 cannot complete** — its gate is
+> T2 and needs two distinct nullifiers. The policy is not being relaxed to fit.
+>
+> **Run §3 first, as the scripted World moment.** It is a stronger beat than it was: the escalation
+> to T1 is *caused by* The Graph — `node-09` really does return `incidentCount: 2` from the live
+> subgraph (verified 01:00), and `REPEAT_OFFENDER_INCIDENTS` is 2, so the same safe action costs a
+> human signature it did not cost the first time. One real scan, allowlist enforced, commits
+> on-chain.
+>
+> **Then run §2 as a deliberate refusal, not a failure.** Inject the cascade, let it freeze at T2,
+> scan once, and let the second slot stay empty. Say it out loud:
+> *"it stopped, and it is still stopped, because the second human isn't in the room — it cannot
+> talk itself past the requirement, and neither can we."* Then dismiss the modal and move on.
+> §2's pass lines 2.6 through 2.11 below are **out of scope for this run** — keep 2.1–2.5.
+> ⚠️ Leaving that gate open holds `node-07` in `awaiting_human`, which the detector now skips, so
+> the loop will not re-fire on it. That is intended. Reset with `pnpm --filter @verimesh/agent seed`
+> before a second run.
+
 ## 2 · Scenario 1 — the ambiguous cascade (the money moment)
 
 ```
@@ -109,7 +128,7 @@ things, rehearse those.
 
 ---
 
-## 3 · Scenario 2 — the agent remembers (the memory beat)
+## 3 · Scenario 2 — the agent remembers (the memory beat) · **run this FIRST — it is now the live World beat**
 
 ```
 pnpm --filter @verimesh/agent scenario recurring_fault
@@ -123,6 +142,11 @@ Same fault signature as a benign spike, on `node-09` — a node the subgraph has
 | 3.2 | the verdict | `VERIFIED` — the physics are fine, and that is the point |
 | 3.3 | the tier | **T1, not T0.** The same safe action now costs a human signature *because history says repeat offender* |
 | 3.4 | one scan | gate resolves |
+| 3.5 | the commit | `resolveOverride` then `Committed` land — **one** `HumanApproval` event on Basescan, with the nullifier of the human who actually scanned, and `authTier: 1` |
+| 3.6 | the audit drawer | that decision's authz ledger shows that one signer, enrolled to opA |
+
+**3.5 is this run's 2.11.** It is the proof that a real human's World ID nullifier reached the chain
+and gated a real commit. Check Basescan, not the screen.
 
 **Say the line out loud while 3.3 is on screen:** *"identical physics, identical verdict — and it
 costs a human this time, because the chain remembers."*
