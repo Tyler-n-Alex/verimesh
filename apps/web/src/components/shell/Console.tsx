@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { TopBar } from "@/components/shell/TopBar";
 import { Panel } from "@/components/ui/Panel";
 import { MeshViewport } from "@/components/mesh/MeshViewport";
+import { MeshLegend } from "@/components/mesh/MeshLegend";
 import { TracePanel } from "@/components/panels/TracePanel";
 import { EventLog } from "@/components/panels/EventLog";
 import { NodeInspector } from "@/components/panels/NodeInspector";
@@ -26,49 +27,55 @@ export function Console() {
   const ops = useMemo(() => operatorCounts(nodes), [nodes]);
 
   return (
-    <div className="flex h-screen flex-col bg-void">
-      <TopBar
-        link={link}
-        linkDetail={linkError ?? undefined}
-        statusCounts={counts}
-        operatorCounts={ops}
-        subgraphState={subgraphConfigured ? "live" : "idle"}
-      />
+    <>
+      <div id="verimesh-console" className="flex flex-col bg-void">
+        <TopBar
+          link={link}
+          linkDetail={linkError ?? undefined}
+          statusCounts={counts}
+          operatorCounts={ops}
+          subgraphState={subgraphConfigured ? "live" : "idle"}
+        />
 
-      <main className="grid min-h-0 flex-1 gap-2 p-2 grid-cols-[minmax(320px,22vw)_1fr_minmax(360px,24vw)]">
-        <div className="flex min-h-0 flex-col gap-2">
-          <Panel label="reasoning trace" className="flex-[8]">
-            <TracePanel />
-          </Panel>
-          <Panel
-            label="event log"
-            className="flex-[4]"
-            accessory={
-              <span className="data text-[10px] text-ink-faint">
-                {events.length}
-              </span>
-            }
-          >
-            <EventLog />
-          </Panel>
-        </div>
+        <main className="grid min-h-0 flex-1 gap-2 p-2 grid-cols-[minmax(320px,22vw)_1fr_minmax(360px,24vw)]">
+          <div className="flex min-h-0 flex-col gap-2">
+            <Panel label="reasoning trace" className="flex-[8]">
+              <TracePanel />
+            </Panel>
+            <Panel
+              label="event log"
+              className="flex-[4]"
+              accessory={
+                <span className="data text-[10px] text-ink-faint">
+                  {events.length}
+                </span>
+              }
+            >
+              <EventLog />
+            </Panel>
+          </div>
 
-        <Panel label="mesh" scroll={false}>
-          <MeshViewport />
-        </Panel>
+          <Panel label="mesh" scroll={false} accessory={<MeshLegend />}>
+            <MeshViewport />
+          </Panel>
 
-        <div className="flex min-h-0 flex-col gap-2">
-          <Panel label="node inspector" className="flex-[6]">
-            <NodeInspector />
-          </Panel>
-          <Panel label="the graph · indexed history" className="flex-[6]" scroll={false}>
-            <GraphPanel />
-          </Panel>
-        </div>
-      </main>
+          <div className="flex min-h-0 flex-col gap-2">
+            <Panel label="node inspector" className="flex-[6]">
+              <NodeInspector />
+            </Panel>
+            <Panel
+              label="the graph · indexed history"
+              className="flex-[6]"
+              scroll={false}
+            >
+              <GraphPanel />
+            </Panel>
+          </div>
+        </main>
+      </div>
 
       <AuditDrawer />
       <FreezeModal />
-    </div>
+    </>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { Pill } from "@/components/ui/Pill";
+import { ProjectorToggle } from "@/components/shell/ProjectorToggle";
 import { STATUS_COLORS, OPERATOR_COLORS } from "@/lib/palette";
 import type { NodeStatus } from "@verimesh/shared";
 
@@ -88,6 +89,10 @@ export function TopBar({
           </Pill>
         ))}
       </div>
+
+      <div className="h-6 w-px bg-hairline" />
+
+      <ProjectorToggle />
     </header>
   );
 }

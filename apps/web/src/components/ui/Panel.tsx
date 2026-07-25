@@ -21,10 +21,12 @@ export function Panel({
     <section
       className={`surface flex min-h-0 flex-col overflow-hidden rounded-md ${className}`}
     >
-      <header className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-hairline bg-panel-raised px-3">
-        <span className="panel-label truncate">{label}</span>
+      <header className="flex min-h-9 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-hairline bg-panel-raised px-3 py-1.5">
+        <span className="panel-label whitespace-nowrap">{label}</span>
         {accessory ? (
-          <div className="flex shrink-0 items-center gap-1.5">{accessory}</div>
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
+            {accessory}
+          </div>
         ) : null}
       </header>
       <div

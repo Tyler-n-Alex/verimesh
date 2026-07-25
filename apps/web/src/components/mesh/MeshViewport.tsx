@@ -4,7 +4,6 @@ import dynamic from "next/dynamic";
 import { useState } from "react";
 import { EmptyState } from "@/components/ui/Panel";
 import { NodeList } from "@/components/panels/NodeList";
-import { OPERATOR_COLORS, STATUS_COLORS, STATUS_ORDER } from "@/lib/palette";
 import { useMeshStore } from "@/store/mesh";
 import { usePerfStore } from "@/store/perf";
 
@@ -60,7 +59,6 @@ export function MeshViewport() {
     <div className="relative h-full w-full">
       <MeshScene />
 
-      <Legend />
       <PerfHud />
 
       <button
@@ -76,66 +74,6 @@ export function MeshViewport() {
           <NodeList />
         </div>
       ) : null}
-    </div>
-  );
-}
-
-function Legend() {
-  return (
-    <div className="absolute bottom-2 left-2 z-20 flex flex-col gap-2 rounded-md border border-hairline bg-void/80 px-2.5 py-2 backdrop-blur-sm">
-      <div className="flex flex-col gap-1">
-        <span className="panel-label text-[9px]">operator · node fill</span>
-        <div className="flex flex-wrap gap-x-3 gap-y-1">
-          {Object.entries(OPERATOR_COLORS).map(([id, swatch]) => (
-            <span key={id} className="flex items-center gap-1.5">
-              <span
-                className="h-2.5 w-2.5 rounded-full"
-                style={{
-                  background: swatch.hex,
-                  boxShadow: `0 0 8px ${swatch.hex}`,
-                }}
-              />
-              <span className="data text-[11px]" style={{ color: swatch.hex }}>
-                {id}
-              </span>
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <div className="h-px bg-hairline" />
-
-      <div className="flex flex-col gap-1">
-        <span className="panel-label text-[9px]">status · ring</span>
-        <div className="flex flex-wrap gap-x-3 gap-y-1">
-          {STATUS_ORDER.map((status) => (
-            <span key={status} className="flex items-center gap-1.5">
-              <span
-                className="h-2.5 w-2.5 rounded-full border-2"
-                style={{ borderColor: STATUS_COLORS[status].hex }}
-              />
-              <span className="data text-[10px] text-ink-dim">
-                {STATUS_COLORS[status].label}
-              </span>
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <div className="h-px bg-hairline" />
-
-      <div className="flex items-center gap-1.5">
-        <span
-          className="h-0.5 w-6"
-          style={{
-            background:
-              "repeating-linear-gradient(90deg,#38bdf8 0 5px,transparent 5px 8px)",
-          }}
-        />
-        <span className="data text-[10px] text-ink-dim">
-          dashed + thick = cross-operator link
-        </span>
-      </div>
     </div>
   );
 }

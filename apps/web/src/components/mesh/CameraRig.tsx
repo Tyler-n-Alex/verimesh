@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { useThree } from "@react-three/fiber";
+import { useCallback, useEffect, useRef } from "react";
+import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 
 const DIRECTION = new THREE.Vector3(0.6, 0.58, 0.95).normalize();
 const target = new THREE.Vector3();
+
+const MARGIN = 1.18;
 
 export function CameraRig({
   center,
@@ -16,34 +18,48 @@ export function CameraRig({
 }) {
   const camera = useThree((s) => s.camera);
   const controls = useThree((s) => s.controls);
-  const size = useThree((s) => s.size);
-  const framedFor = useRef<string>("");
+  const lastFit = useRef("");
+
+  const fit = useCallback(
+    (force: boolean) => {
+      if (!(camera instanceof THREE.PerspectiveCamera)) return;
+
+      const aspect = camera.aspect > 0 ? camera.aspect : 1;
+      const key = `${center.join(",")}|${radius.toFixed(2)}|${aspect.toFixed(3)}`;
+      if (!force && lastFit.current === key) return;
+      lastFit.current = key;
+
+      const vFov = (camera.fov * Math.PI) / 180;
+      const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
+      const fitRadius = radius * MARGIN;
+      const distance = Math.max(
+        fitRadius / Math.sin(vFov / 2),
+        fitRadius / Math.sin(hFov / 2)
+      );
+
+      target.set(center[0], center[1] + radius * 0.05, center[2]);
+      camera.position.copy(DIRECTION).multiplyScalar(distance).add(target);
+      camera.lookAt(target);
+      camera.updateProjectionMatrix();
+
+      const orbit = controls as unknown as
+        | { target: THREE.Vector3; update: () => void }
+        | undefined;
+      if (orbit?.target) {
+        orbit.target.copy(target);
+        orbit.update();
+      }
+    },
+    [camera, controls, center, radius]
+  );
 
   useEffect(() => {
-    const key = `${center.join(",")}|${radius}|${Math.round(size.width / 40)}x${Math.round(size.height / 40)}`;
-    if (framedFor.current === key) return;
-    framedFor.current = key;
+    fit(true);
+  }, [fit]);
 
-    const aspect = size.width / Math.max(1, size.height);
-    const widen = aspect < 1.25 ? 1.25 / aspect : 1;
-    const distance = radius * 2.5 * widen;
-
-    target.set(center[0], center[1], center[2]);
-    camera.position
-      .copy(DIRECTION)
-      .multiplyScalar(distance)
-      .add(target);
-    camera.lookAt(target);
-    camera.updateProjectionMatrix();
-
-    const orbit = controls as unknown as
-      | { target: THREE.Vector3; update: () => void }
-      | undefined;
-    if (orbit?.target) {
-      orbit.target.copy(target);
-      orbit.update();
-    }
-  }, [camera, controls, center, radius, size.width, size.height]);
+  useFrame(() => {
+    fit(false);
+  });
 
   return null;
 }
