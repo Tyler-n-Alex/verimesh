@@ -5,8 +5,8 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "seed": "tsx --env-file=../../.env src/seed.ts",
-    "dev": "tsx watch --env-file=../../.env src/index.ts"
+    "seed": "tsx --env-file=../../.env.local src/seed.ts",
+    "dev": "tsx watch --env-file=../../.env.local src/index.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

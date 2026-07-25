@@ -207,8 +207,16 @@ you does on your own machine.
       implements them in `C3.*` · done 13:45
 - [x] **B0a** `services/agent/src/seed.ts` + `pnpm --filter @verimesh/agent seed` — upserts the
       blueprint's 16 nodes, 25 edges and a first telemetry row · done 13:45 · **run it to unblock A**
-- [ ] **H0.7** Fill in the Owners table above; everyone `.env` populated, `pnpm install`,
-      `pnpm typecheck` green · 10m · owner: all
+- [x] **H0.9** Both migrations applied to Supabase (39 statements, 0 failures) and the mesh seeded
+      — **16 nodes · 25 edges · opA 6 / opB 6 / opC 4 · the `node-07`→`node-12` cascade edge is
+      live.** Realtime publication covers `nodes, events, proposals, verdicts, human_gates,
+      human_approvals`. **A: the data is there, `A1` works now** · done 14:05
+- [x] **H0.10** Two setup traps fixed — `.npmrc` (`manage-package-manager-versions=false`), because
+      the `packageManager: pnpm@9.4.2` pin made `pnpm install` fail outright on pnpm 10; and the env
+      file is now **`.env.local`** everywhere (Next.js loads it automatically, service scripts read
+      it via `--env-file`). Do not create a second `.env` · done 14:05
+- [ ] **H0.7** Fill in the Owners table above; everyone: copy `.env.example` → **`.env.local`**,
+      `pnpm install`, `pnpm typecheck` green · 10m · owner: all
 - [x] **H0.8** `docs/IMPLEMENTATION_PLAN_THEGRAPH.md` committed (`83a7685`) · done
       · ⚠️ it still describes the **0G Chain registry**, **`verifyCloudProof`** and **The Graph's
       Subgraph MCP server**. Corrections 1–3 at the top of this board supersede it. Read the board

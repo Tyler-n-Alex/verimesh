@@ -44,7 +44,13 @@ pnpm install
 pnpm typecheck
 ```
 
-Copy `.env.example` to `.env` and fill in the Supabase, World, 0G, 0G Chain, and subgraph values, then apply `supabase/migrations/0001_init.sql`.
+Copy `.env.example` to **`.env.local`** and fill in the Supabase, World, 0G, registry-chain and subgraph values. `.env.local` is the single env file for the whole monorepo — Next.js loads it automatically and the service scripts read it via `--env-file`.
+
+Apply `supabase/migrations/0001_init.sql` then `0002_authz.sql`, then seed the mesh:
+
+```
+pnpm --filter @verimesh/agent seed
+```
 
 ## AI attribution
 
