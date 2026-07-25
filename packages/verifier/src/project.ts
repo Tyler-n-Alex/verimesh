@@ -1,5 +1,6 @@
 import {
   blueprint,
+  isParticipating,
   step,
   type Edge,
   type GridNode,
@@ -28,7 +29,7 @@ export interface Projection {
   trajectory: GridState[];
   final: Record<string, NodeMetrics>;
   peak: Record<string, NodeMetrics>;
-  offline: string[];
+  dormant: string[];
 }
 
 const edges = (blueprint as { edges: Edge[] }).edges;
@@ -66,7 +67,7 @@ function liveNeighbours(
   for (const node of state.nodes) {
     const weight = weights.get(node.id);
     if (weight === undefined) continue;
-    if (node.status === "offline") continue;
+    if (!isParticipating(node.status)) continue;
     out.push({ node, weight });
   }
   return out.sort((a, b) => a.node.id.localeCompare(b.node.id));
@@ -164,11 +165,11 @@ export function applyAction(
         reason: `unknown target node ${targetId}`,
       };
     }
-    if (node.status === "offline") {
+    if (!isParticipating(node.status)) {
       return {
         state: next,
         projectable: false,
-        reason: `target node ${targetId} is already offline`,
+        reason: `target node ${targetId} is already ${node.status}`,
       };
     }
 
@@ -258,6 +259,8 @@ export function projectAction(
     trajectory,
     final,
     peak,
-    offline: last.nodes.filter((n) => n.status === "offline").map((n) => n.id),
+    dormant: last.nodes
+      .filter((n) => !isParticipating(n.status))
+      .map((n) => n.id),
   };
 }

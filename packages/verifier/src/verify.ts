@@ -3,6 +3,7 @@ import {
   describeViolation,
   excess,
   principalViolation,
+  unverifiableReason,
   type GridState,
   type NodeMetrics,
   type Proposal,
@@ -36,17 +37,18 @@ export interface DetailedVerdictResult extends VerdictResult {
   peak: Record<string, NodeMetrics>;
   baseline: Record<string, NodeMetrics>;
   baselinePeak: Record<string, NodeMetrics>;
-  offline: string[];
-  baselineOffline: string[];
+  dormant: string[];
+  baselineDormant: string[];
+  unverifiable: string[];
   blast: BlastRadius;
   horizon: number;
 }
 
 function violationsIn(
   peak: Record<string, NodeMetrics>,
-  offline: string[]
+  dormant: string[]
 ): Violation[] {
-  const skip = new Set(offline);
+  const skip = new Set(dormant);
   const out: Violation[] = [];
   for (const [nodeId, metrics] of Object.entries(peak)) {
     if (skip.has(nodeId)) continue;
@@ -55,6 +57,20 @@ function violationsIn(
   return out.sort(
     (a, b) => a.node.localeCompare(b.node) || a.metric.localeCompare(b.metric)
   );
+}
+
+function unverifiableIn(
+  peak: Record<string, NodeMetrics>,
+  dormant: string[]
+): string[] {
+  const skip = new Set(dormant);
+  const out: string[] = [];
+  for (const [nodeId, metrics] of Object.entries(peak)) {
+    if (skip.has(nodeId)) continue;
+    const reason = unverifiableReason(nodeId, metrics);
+    if (reason) out.push(reason);
+  }
+  return out.sort();
 }
 
 function splitViolations(
@@ -101,7 +117,7 @@ export function computeBlastRadius(
   baseline: Projection
 ): BlastRadius {
   const operatorOf = new Map(state.nodes.map((n) => [n.id, n.operator]));
-  const baselineOffline = new Set(baseline.offline);
+  const baselineDormant = new Set(baseline.dormant);
   const nodes = new Set<string>();
 
   for (const nodeId of Object.keys(projection.peak)) {
@@ -109,9 +125,9 @@ export function computeBlastRadius(
       projection.peak[nodeId],
       baseline.peak[nodeId]
     );
-    const wentOffline =
-      projection.offline.includes(nodeId) && !baselineOffline.has(nodeId);
-    if (changed || wentOffline) nodes.add(nodeId);
+    const wentDormant =
+      projection.dormant.includes(nodeId) && !baselineDormant.has(nodeId);
+    if (changed || wentDormant) nodes.add(nodeId);
   }
 
   const sortedNodes = Array.from(nodes).sort();
@@ -161,7 +177,7 @@ export function verifyConstraints(
   const baseline = projectAction(state, NO_OP_PROPOSAL, horizon);
   const projection = projectAction(state, proposal, horizon);
 
-  const baselineViolations = violationsIn(baseline.peak, baseline.offline);
+  const baselineViolations = violationsIn(baseline.peak, baseline.dormant);
 
   if (!projection.projectable) {
     const targeted = state.nodes.filter((n) =>
@@ -176,8 +192,9 @@ export function verifyConstraints(
       peak: baseline.peak,
       baseline: baseline.final,
       baselinePeak: baseline.peak,
-      offline: baseline.offline,
-      baselineOffline: baseline.offline,
+      dormant: baseline.dormant,
+      baselineDormant: baseline.dormant,
+      unverifiable: unverifiableIn(baseline.peak, baseline.dormant),
       blast: {
         nodes: targeted.map((n) => n.id).sort(),
         operators: Array.from(new Set(targeted.map((n) => n.operator))).sort(),
@@ -186,12 +203,33 @@ export function verifyConstraints(
     };
   }
 
-  const violations = violationsIn(projection.peak, projection.offline);
+  const unverifiable = unverifiableIn(projection.peak, projection.dormant);
+  const blastOfProjection = computeBlastRadius(state, projection, baseline);
+
+  if (unverifiable.length > 0) {
+    return {
+      verdict: "ESCALATE",
+      detail: `${proposal.proposed_action} cannot be verified — the projection contains metrics no invariant applies to: ${unverifiable.join("; ")}`,
+      projected: projection.final,
+      violations: [],
+      preExisting: baselineViolations,
+      peak: projection.peak,
+      baseline: baseline.final,
+      baselinePeak: baseline.peak,
+      dormant: projection.dormant,
+      baselineDormant: baseline.dormant,
+      unverifiable,
+      blast: blastOfProjection,
+      horizon,
+    };
+  }
+
+  const violations = violationsIn(projection.peak, projection.dormant);
   const { attributable, preExisting } = splitViolations(
     violations,
     baselineViolations
   );
-  const blast = computeBlastRadius(state, projection, baseline);
+  const blast = blastOfProjection;
 
   const verdict: VerdictResult["verdict"] =
     attributable.length > 0
@@ -225,8 +263,9 @@ export function verifyConstraints(
     peak: projection.peak,
     baseline: baseline.final,
     baselinePeak: baseline.peak,
-    offline: projection.offline,
-    baselineOffline: baseline.offline,
+    dormant: projection.dormant,
+    baselineDormant: baseline.dormant,
+    unverifiable,
     blast,
     horizon,
   };

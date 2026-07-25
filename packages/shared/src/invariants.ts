@@ -1,6 +1,12 @@
 import blueprint from "./genio_blueprint.json";
 import { THROTTLE_FLOOR, THROTTLE_SLOPE } from "./physics";
-import type { GridState, NodeMetrics, Violation } from "./types";
+import type { GridState, NodeMetrics, NodeStatus, Violation } from "./types";
+
+export const NON_PARTICIPATING_STATUSES: NodeStatus[] = ["offline", "isolated"];
+
+export function isParticipating(status: NodeStatus): boolean {
+  return !NON_PARTICIPATING_STATUSES.includes(status);
+}
 
 export type InvariantMetric = "temp" | "load" | "power" | "throughput";
 
@@ -61,6 +67,34 @@ export function throughputFloor(bounds: PhysicalBounds, load: number): number {
   );
 }
 
+export function unverifiableReason(
+  nodeId: string,
+  metrics: NodeMetrics
+): string | undefined {
+  if (!BOUNDS.has(nodeId)) {
+    return `${nodeId} has no bounds in genio_blueprint.json`;
+  }
+  const bad: string[] = [];
+  for (const metric of INVARIANT_METRICS) {
+    const value = metrics[metric];
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      bad.push(`${metric} is ${String(value)}`);
+    }
+  }
+  if (bad.length === 0) return undefined;
+  return `${nodeId} ${bad.join(", ")}`;
+}
+
+export function unverifiableNodes(state: GridState): string[] {
+  return state.nodes
+    .filter(
+      (node) =>
+        isParticipating(node.status) &&
+        unverifiableReason(node.id, node.metrics) !== undefined
+    )
+    .map((node) => node.id);
+}
+
 export function checkMetrics(
   nodeId: string,
   metrics: NodeMetrics
@@ -111,7 +145,7 @@ export function checkMetrics(
 export function checkState(state: GridState): Violation[] {
   const out: Violation[] = [];
   for (const node of state.nodes) {
-    if (node.status === "offline") continue;
+    if (!isParticipating(node.status)) continue;
     out.push(...checkMetrics(node.id, node.metrics));
   }
   return out;

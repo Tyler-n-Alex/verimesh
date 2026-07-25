@@ -1,5 +1,11 @@
-import type { GridState, GridNode } from "./types";
+import type { GridState, GridNode, NodeStatus } from "./types";
 import blueprint from "./genio_blueprint.json";
+
+const NON_PARTICIPATING: NodeStatus[] = ["offline", "isolated"];
+
+function isParticipating(status: NodeStatus): boolean {
+  return !NON_PARTICIPATING.includes(status);
+}
 
 export interface StepControls {
   noise?: number;
@@ -33,7 +39,7 @@ export function step(state: GridState, controls: StepControls = {}): GridState {
   const dt = controls.dt ?? 1;
   const nodes: GridNode[] = state.nodes.map((n) => {
     const p = nodeParams.get(n.id);
-    if (!p || n.status === "offline") return n;
+    if (!p || !isParticipating(n.status)) return n;
     const m = n.metrics;
     const heating = p.thermal.a * m.load + p.thermal.b * m.power;
     const cooling = p.thermal.c * (m.temp - p.thermal.T_ambient);

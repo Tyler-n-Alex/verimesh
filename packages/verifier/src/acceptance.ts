@@ -110,6 +110,14 @@ interface IndexedOverride {
   txHash: string;
 }
 
+function safeNormalize(value: string): string | null {
+  try {
+    return normalizeNullifier(value);
+  } catch {
+    return null;
+  }
+}
+
 function sameHex(a: string | null | undefined, b: string | null | undefined) {
   const left = (a ?? "").toLowerCase();
   const right = (b ?? "").toLowerCase();
@@ -236,16 +244,36 @@ export async function quorumTruthCheck(
       continue;
     }
 
-    const demanded = distinctNullifiers(
-      gate.approvals.map((approval) => approval.nullifier)
+    const demandedRaw = gate.approvals.map((approval) =>
+      safeNormalize(approval.nullifier)
+    );
+    if (demandedRaw.some((value) => value === null)) {
+      mismatches.push(
+        "the policy's own approval set contains a nullifier that is not a valid hex value"
+      );
+    }
+    const demanded = Array.from(
+      new Set(demandedRaw.filter((value): value is string => value !== null))
     ).sort();
 
-    const onChainRaw = approvals.map((approval) => approval.worldIdNullifier);
-    const onChain = distinctNullifiers(onChainRaw).sort();
+    const onChainRaw = approvals.map((approval) =>
+      safeNormalize(approval.worldIdNullifier)
+    );
+    for (const [index, value] of onChainRaw.entries()) {
+      if (value === null) {
+        mismatches.push(
+          `the chain recorded an unparseable nullifier at approvalIndex ${approvals[index].approvalIndex}: ${approvals[index].worldIdNullifier}`
+        );
+      }
+    }
+    const parsedOnChain = onChainRaw.filter(
+      (value): value is string => value !== null
+    );
+    const onChain = Array.from(new Set(parsedOnChain)).sort();
 
-    if (onChainRaw.length !== onChain.length) {
+    if (parsedOnChain.length !== onChain.length) {
       mismatches.push(
-        `the chain recorded ${onChainRaw.length} approvals but only ${onChain.length} distinct humans`
+        `the chain recorded ${parsedOnChain.length} approvals but only ${onChain.length} distinct humans`
       );
     }
 
@@ -266,12 +294,16 @@ export async function quorumTruthCheck(
       );
     }
 
-    const chainApprovals: HumanApproval[] = approvals.map((approval) => ({
-      nullifier: normalizeNullifier(approval.worldIdNullifier),
-      operator: approval.operator,
-      chosenAction: gate.chosenAction,
-      ts: Number(approval.ts),
-    }));
+    const chainApprovals: HumanApproval[] = approvals
+      .map((approval, index) => ({
+        nullifier: onChainRaw[index],
+        operator: approval.operator,
+        chosenAction: gate.chosenAction,
+        ts: Number(approval.ts),
+      }))
+      .filter(
+        (approval): approval is HumanApproval => approval.nullifier !== null
+      );
 
     if (!isSatisfied(gate.requirement, chainApprovals)) {
       mismatches.push(

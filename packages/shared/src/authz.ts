@@ -117,16 +117,19 @@ export function overrideCount(
   try {
     normalized = normalizeNullifier(nullifier);
   } catch {
-    return 0;
+    return Infinity;
   }
+  let highest = 0;
   for (const [key, value] of Object.entries(context.overrideCounts)) {
     try {
-      if (normalizeNullifier(key) === normalized) return value;
+      if (normalizeNullifier(key) === normalized) {
+        highest = Math.max(highest, value);
+      }
     } catch {
       continue;
     }
   }
-  return 0;
+  return highest;
 }
 
 export function hasBudget(
@@ -339,3 +342,37 @@ export const isSatisfied: IsSatisfied = (requirement, collected) => {
 
   return coversRequiredOperators(requirement.operatorsRequired, collected);
 };
+
+export interface GateResolution {
+  resolved: boolean;
+  accepted: HumanApproval[];
+  rejected: { approval: HumanApproval; rejection: ApprovalRejection }[];
+}
+
+export function resolveGate(
+  requirement: AuthorizationRequirement,
+  collected: HumanApproval[],
+  config: AuthzConfig,
+  context: AuthzContext
+): GateResolution {
+  const accepted: HumanApproval[] = [];
+  const rejected: { approval: HumanApproval; rejection: ApprovalRejection }[] =
+    [];
+
+  for (const approval of collected) {
+    const check = checkApproval(
+      requirement,
+      accepted,
+      approval,
+      config,
+      context
+    );
+    if (check.accepted) {
+      accepted.push(approval);
+    } else {
+      rejected.push({ approval, rejection: check.rejection! });
+    }
+  }
+
+  return { resolved: isSatisfied(requirement, accepted), accepted, rejected };
+}

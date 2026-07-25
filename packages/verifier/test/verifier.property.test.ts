@@ -4,12 +4,15 @@ import {
   ACTIONS,
   blueprint,
   checkState,
+  isParticipating,
+  unverifiableReason,
   type Action,
   type GridNode,
   type GridState,
   type NodeStatus,
   type Proposal,
 } from "@verimesh/shared";
+
 import { baselineState, projectAction, verifyConstraints } from "../src/index";
 
 const NODE_IDS = (blueprint as { nodes: { id: string }[] }).nodes.map(
@@ -175,6 +178,83 @@ describe("C4.1 · verifier property suite", () => {
           )
         );
         return result.blast.operators.every((op) => operators.has(op));
+      }),
+      { numRuns: 200 }
+    );
+  });
+});
+
+const hostileMetricsArb = fc.record({
+  ts: fc.constant(0),
+  load: fc.oneof(fc.double({ min: 0, max: 1.2, noNaN: true }), fc.constantFrom(NaN, Infinity)),
+  temp: fc.oneof(fc.double({ min: 18, max: 100, noNaN: true }), fc.constantFrom(NaN, -Infinity)),
+  throughput: fc.oneof(fc.double({ min: 0, max: 1200, noNaN: true }), fc.constantFrom(NaN)),
+  power: fc.oneof(fc.double({ min: 0, max: 1200, noNaN: true }), fc.constantFrom(NaN, Infinity)),
+  mem: fc.double({ min: 0, max: 1, noNaN: true }),
+  fanRpm: fc.double({ min: 800, max: 6000, noNaN: true }),
+});
+
+const hostileStateArb: fc.Arbitrary<GridState> = fc
+  .tuple(
+    fc.array(hostileMetricsArb, {
+      minLength: NODE_IDS.length,
+      maxLength: NODE_IDS.length,
+    }),
+    fc.array(fc.constantFrom(...STATUSES), {
+      minLength: NODE_IDS.length,
+      maxLength: NODE_IDS.length,
+    }),
+    fc.boolean()
+  )
+  .map(([metrics, statuses, withGhost]) => {
+    const base = baselineState();
+    const nodes: GridNode[] = base.nodes.map((node, i) => ({
+      ...node,
+      status: statuses[i],
+      metrics: metrics[i],
+    }));
+    if (withGhost) {
+      nodes.push({
+        ...base.nodes[0],
+        id: "node-ghost",
+        operator: "opZ",
+        status: "healthy",
+      });
+    }
+    return { nodes, edges: base.edges };
+  });
+
+describe("C4.1 · the verifier never vouches for what it cannot check", () => {
+  it("VERIFIED implies every participating node in every frame is both known and finite", () => {
+    fc.assert(
+      fc.property(hostileStateArb, proposalArb, (state, proposal) => {
+        const result = verifyConstraints(state, proposal, HORIZON);
+        if (result.verdict !== "VERIFIED") return true;
+        const projection = projectAction(state, proposal, HORIZON);
+        return projection.trajectory.every((frame) =>
+          frame.nodes.every(
+            (node) =>
+              !isParticipating(node.status) ||
+              (unverifiableReason(node.id, node.metrics) === undefined &&
+                checkState(frame).length === 0)
+          )
+        );
+      }),
+      { numRuns: 400 }
+    );
+  });
+
+  it("never returns VERIFIED for a mesh containing a node it has no bounds for", () => {
+    fc.assert(
+      fc.property(stateArb, proposalArb, (state, proposal) => {
+        const withGhost = {
+          edges: state.edges,
+          nodes: [
+            ...state.nodes,
+            { ...state.nodes[0], id: "node-ghost", status: "healthy" as const },
+          ],
+        };
+        return verifyConstraints(withGhost, proposal, HORIZON).verdict !== "VERIFIED";
       }),
       { numRuns: 200 }
     );
