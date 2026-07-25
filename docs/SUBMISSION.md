@@ -80,8 +80,16 @@ itself queries as trustless memory, and every reasoning blob is written immutabl
 
 - Subgraph query endpoint: `TODO` (B2.4)
 - Sample GraphQL query + its real response: `TODO` (B2.4)
-- Registry address on Base Sepolia + Basescan links: `TODO` (B2.1)
-- Decision tx hashes from the recorded run: `TODO` (B6.5)
-- 0G Storage roots that resolve: `TODO` (B4)
+- Registry address on Base Sepolia + Basescan links: **done (B2.1)** —
+  `0x0Fb557580E7C01Aed5D02622558216B9eb19c33c`,
+  <https://sepolia.basescan.org/address/0x0Fb557580E7C01Aed5D02622558216B9eb19c33c>
+- Decision tx hashes from the recorded run: **done (B6.5/B2.2/B8.3)** — seed events:
+  Committed <https://sepolia.basescan.org/tx/0x996e2a123b671dd2959d837c632f99eb4dae9b455340e71c83b3735b3b9f8614>,
+  Frozen <https://sepolia.basescan.org/tx/0xa3d460a867fae16bd4e254b7605f93986103f70f4fb673f594b0b614943efc50>,
+  Resolved <https://sepolia.basescan.org/tx/0x521e35264beb21d99430b03a862f5a43f47d0b17210c70e4895dd8e4f0d0250c>
+- 0G Storage roots that resolve: **done (B4)** — verified with a real upload, root
+  `0xd00122f09183ac4d6e7f3a43942591be6316b1b3c92e7884c4caead5547ae059`,
+  tx <https://chainscan-galileo.0g.ai/tx/0x536f9c873314df3e3217a0706d5664015f862db5cf11d86fa8fd845bf2d7c190>
+  — replace with the actual demo-run roots once the recorded scenarios exist
 - Video link: `TODO`
 - `README.md` AI-attribution section reviewed by a human: `TODO`

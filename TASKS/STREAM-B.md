@@ -183,9 +183,11 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
 - [x] **B7.2** Point B6.2's interface at the MCP tool so the agent's step 3 goes through MCP
       · 30m · needs: B7.1, B6.2 · done 19:57 · `HISTORY_VIA_MCP=1` routes `loop.ts`'s `fetchHistory`
       through the MCP server instead of direct GraphQL
-- [ ] **B7.3** Write the submission line **accurately**: "a custom MCP server exposing our subgraph
+- [x] **B7.3** Write the submission line **accurately**: "a custom MCP server exposing our subgraph
       as agent-queryable memory" — **not** "we used The Graph's Subgraph MCP server." Judges check
-      · 5m · needs: B7.2
+      · 5m · needs: B7.2 · done 20:23 · already correct in `docs/SUBMISSION.md`'s "Wording we must
+      get exactly right" section (C wrote it); filled in the registry address, seed decision tx
+      hashes and a verified 0G Storage root in that doc's "To paste before submitting" list
 
 ---
 
