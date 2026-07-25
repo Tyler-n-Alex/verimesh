@@ -118,6 +118,9 @@ around it silently and leave the next person to rediscover it.
 | Time | Who | Blocked on | Needs |
 |---|---|---|---|
 | | | | |
+| 14:40 | C | **B2.4 subgraph deploy** — mappings, ABI and manifest are done and `graph codegen && graph build` both pass locally | `REGISTRY_ADDRESS` **and the deployment block number** from B2.1, plus a `SUBGRAPH_DEPLOY_KEY` from Studio. ~10 min of work once those exist. **This is the G2 17:00 gate** |
+| 14:40 | C | **C5.1 / C5.2 acceptance harness** — written and unit-tested against a stub endpoint, cannot be run for real | `SUBGRAPH_URL` (B2.4), one committed decision (B6.5), one resolved override (B5.5) |
+| 14:40 | C → A | `DECISION_AUDIT_QUERY` in `apps/web/src/lib/subgraph.ts` declares `$decisionId: Bytes!` but uses it for `decisions(where: { id: ... })`, and `Decision.id` is `ID!` in the frozen schema — the subgraph will reject that variable type the moment it is live | A: split it into `$decisionId: ID!` for the `decisions` filter and a separate `Bytes!` variable for `freezes`/`approvals`/`overrides`. Not urgent until `SUBGRAPH_URL` exists, but it will look like "the subgraph is broken" at 3am |
 
 ---
 
