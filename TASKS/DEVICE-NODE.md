@@ -184,12 +184,23 @@ fresh database or after someone re-runs the seed. It is idempotent — running i
 
 2. **Install Tailscale** from the Play Store and sign in with the **same account** as the host.
    Confirm the host appears in its device list.
-3. In Termux:
+3. In Termux — **`pkg upgrade`, not just `pkg update`**:
    ```sh
-   pkg update && pkg install nodejs
+   pkg update && pkg upgrade -y
+   pkg install nodejs
+   node -v
    pkg install termux-api        # only if you installed the Termux:API app
    termux-battery-status         # only if you installed the Termux:API app
    ```
+   🚨 **`pkg update` only refreshes the package index — it upgrades nothing.** If you install `nodejs`
+   on top of an older `openssl`, Node is linked against a newer libcrypto than the one on the device
+   and dies immediately with:
+   ```
+   CANNOT LINK EXECUTABLE "node": cannot locate symbol "OSSL_PROVIDER_add_conf_parameter"
+   ```
+   `pkg upgrade -y` is the fix. Always run it before `pkg install nodejs`, and confirm with `node -v`
+   before moving on. See *Troubleshooting* for what to do if it persists.
+
    **`nodejs` is the only required package.** Do not bother with `stress-ng` — it is not in Termux's
    default repo; `heat.js` replaces it (see *Making it fail on cue*).
    If you did install it, `termux-battery-status` must print JSON containing `"temperature"`.
@@ -368,6 +379,43 @@ The reasoning-trace panel picked the device up **with no frontend change**, beca
 whose type contains `anomaly` — so the phone's own failure already streams into the trace.
 
 ---
+
+## Troubleshooting — things that actually happened
+
+**`CANNOT LINK EXECUTABLE "node": cannot locate symbol "OSSL_PROVIDER_add_conf_parameter"`**
+A partially-upgraded package set: `nodejs` was built against a newer OpenSSL than the `openssl`
+installed on the device. In order:
+```sh
+pkg upgrade -y                          # the fix in almost every case
+pkg install --reinstall openssl nodejs  # force both into agreement
+termux-change-repo                      # stale/inconsistent mirror; pick a nearer one, then pkg upgrade -y
+pkg install nodejs-lts                  # last resort, a differently-built Node
+```
+Verify with `node -v` before doing anything else.
+
+**`pkg install stress-ng` → unable to locate package**
+Expected — it is not in Termux's default repo. Use `heat.js`.
+
+**`curl` to the bootstrap URL hangs or refuses**
+Network, not phone. In order: is the host running `pnpm --filter @verimesh/web dev`; is a consumer VPN
+active on the host (disconnect it); was the firewall rule added; are phone and host on the same
+Tailscale account; is the address the **host's** `100.x` and not some other machine's.
+
+**Ingest returns `404 unknown node`**
+Run `POST /api/device/register` on the host once.
+
+**Ingest returns `401`**
+`VERIMESH_DEVICE_TOKEN` on the phone must match `DEVICE_TOKEN` in the host's repo-root `.env.local`
+exactly. The host reads it at startup, so restart the dev server after editing it.
+
+**Node runs, reporter prints, but the console shows nothing**
+Check the reporter's own output — it prints the ingest status per tick. If it prints `-> healthy` the
+write is landing and the problem is the browser: confirm the console's top bar says
+*Supabase Connected*.
+
+**`soc -` in the reporter output**
+`/sys/class/thermal` is not readable on this handset. Stay on `VERIMESH_TEMP_SOURCE=battery` and lower
+`DEVICE_T_WARN`/`DEVICE_T_MAX` to match what battery temp actually reaches off-charger.
 
 ## Risk register
 
