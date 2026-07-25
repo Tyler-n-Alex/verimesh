@@ -5,6 +5,10 @@
   "type": "module",
   "main": "src/index.ts",
   "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
     "@verimesh/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.4"
   }
 }

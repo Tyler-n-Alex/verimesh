@@ -4,7 +4,7 @@ import type { GridState } from "./types";
 
 export const ProposalSchema = z.object({
   diagnosis: z.string().min(1),
-  proposed_action: z.enum([...ACTIONS] as [string, ...string[]]),
+  proposed_action: z.enum(ACTIONS),
   target_nodes: z.array(z.string()),
   expected_effect: z.string(),
   confidence: z.number().min(0).max(1),

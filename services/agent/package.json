@@ -18,6 +18,7 @@
     "@verimesh/verifier": "workspace:*"
   },
   "devDependencies": {
+    "@types/node": "^22.7.4",
     "tsx": "^4.16.2"
   }
 }

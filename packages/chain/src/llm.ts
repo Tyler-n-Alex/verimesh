@@ -128,7 +128,7 @@ async function callZerog(observation: ObservationPayload): Promise<{
 
   const chatId = response.headers.get("ZG-Res-Key") || data.id;
   const valid = chatId
-    ? await broker.inference.processResponse(providerAddress, chatId)
+    ? (await broker.inference.processResponse(providerAddress, chatId)) ?? false
     : false;
 
   return { text: data.choices[0]?.message?.content ?? "", valid };
