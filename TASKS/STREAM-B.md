@@ -255,7 +255,30 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
       `{ idkitResponse }` returns the canonical form and records nothing. The CLI normalises,
       refuses a malformed value, warns if one human is enrolled to two operators (they could then
       fill a T2 on their own), and prints that the self-enrolment bypass switches off the moment
-      the arrays are non-empty. **Restart `next dev` afterwards** — the JSON is imported at load
+      the arrays are non-empty.
+      · 🚨 **00:50 — we have ONE World ID identity, not two. T2 cannot resolve as it stands.**
+      The quorum is 2 distinct nullifiers and the policy must keep demanding 2 — weakening it to 1
+      deletes the entire World differentiator. So the cascade will freeze at T2 and sit there.
+      Three ways out, in the order I'd take them:
+      1. **Enrol a second verified human at the venue.** World is a sponsor and every one of their
+         booth staff is orb-verified; so are a lot of hackers and judges. **This is now a ~30 second
+         job and needs no restart:** the verify route reads `authz_config.json` **from disk on every
+         request** (`apps/web/src/lib/authzConfig.ts`, falls back to the bundled copy), and a
+         gate-less scan is logged as a `worldid` event, so it is: they scan → `enrol --last opB` →
+         they scan the gate. Nobody retypes 66 characters of hex on a borrowed phone.
+      2. **A second, *staging* Developer Portal app + the World ID Simulator for both identities.**
+         Checked against the installed SDK: `@worldcoin/idkit-core@4.2.2` takes
+         `environment?: "production" | "staging" | "sandbox"`, **defaulting to production**, and
+         ours is a production app (`app_bee9a79b…`, no `staging` segment) so the simulator cannot
+         stand in for the second human today. Going staging costs a new app id, RP id and signing
+         key — it re-does B5.1 — and **the real phone can no longer scan either**, so the live
+         orb-verified scan the board lists under *never cut* is what you'd be trading away.
+      3. **Demo T1 as the live World beat** — `recurring_fault`, one real scan, allowlist enforced,
+         commits on-chain — and show T2's mechanics from the seeded on-chain history rather than
+         live. Honest, and it keeps a real scan on stage. **If we do this, the submission and the
+         video must not imply two humans scanned live.**
+      ⚠️ `--auto-approve` can rehearse the T2 wiring but **must never be run on the demo machine**:
+      it fabricates signers, and any run puts those nullifiers on-chain permanently
 - [x] **B5.7** ✦ Subgraph-fed policy inputs (plan §9 B5 stretch, §1D) — before opening a gate, query
       the subgraph over **plain GraphQL** (not the agent's MCP tool — the one-LLM-decision invariant
       must hold) for: (a) the node's incident count → escalate the tier for a repeat offender,

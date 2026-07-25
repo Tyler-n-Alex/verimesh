@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import {
-  authzConfig,
   checkApproval,
   distinctNullifiers,
   hasBudget,
@@ -13,6 +12,7 @@ import {
   type HumanApproval,
 } from "@verimesh/shared";
 import { ADMIN_MISSING, getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { enrolledTotal, loadAuthzConfig } from "@/lib/authzConfig";
 
 export const dynamic = "force-dynamic";
 
@@ -142,11 +142,12 @@ function selfEnrollCheck(
   return { accepted: true };
 }
 
-function operatorsForNullifier(nullifier: string): string[] {
-  const operators = (authzConfig as { operators: Record<string, string[]> })
-    .operators;
+function operatorsForNullifier(
+  config: AuthzConfig,
+  nullifier: string
+): string[] {
   const matches: string[] = [];
-  for (const [operator, enrolled] of Object.entries(operators)) {
+  for (const [operator, enrolled] of Object.entries(config.operators)) {
     for (const candidate of enrolled) {
       let normalized: string;
       try {
@@ -163,10 +164,8 @@ function operatorsForNullifier(nullifier: string): string[] {
   return matches;
 }
 
-function allowlistIsEmpty(): boolean {
-  const operators = (authzConfig as { operators: Record<string, string[]> })
-    .operators;
-  return Object.values(operators).every((list) => list.length === 0);
+function allowlistIsEmpty(config: AuthzConfig): boolean {
+  return enrolledTotal(config) === 0;
 }
 
 export async function POST(request: Request) {
@@ -246,17 +245,33 @@ export async function POST(request: Request) {
     );
   }
 
-  const enrolledFor = operatorsForNullifier(nullifier);
+  const { config, source: configSource } = loadAuthzConfig();
+  const enrolledFor = operatorsForNullifier(config, nullifier);
   const selfEnroll =
-    process.env.WORLDID_ALLOW_SELF_ENROLL === "true" || allowlistIsEmpty();
+    process.env.WORLDID_ALLOW_SELF_ENROLL === "true" || allowlistIsEmpty(config);
 
   if (body.gateId === undefined || body.gateId === null) {
+    const admin = getSupabaseAdmin();
+    if (admin) {
+      await admin.from("events").insert({
+        ts: Date.now(),
+        type: "worldid",
+        node_id: null,
+        message: `identity check: ${nullifier} ${enrolledFor.length > 0 ? `already enrolled to ${enrolledFor.join(", ")}` : "not enrolled to any operator"}`,
+      });
+    }
+
     return NextResponse.json({
       ok: true,
       nullifier,
       enrolledFor,
       recorded: false,
-      note: "proof verified; no gateId supplied so nothing was recorded",
+      allowlistSource: configSource,
+      enrolCommand:
+        enrolledFor.length > 0
+          ? null
+          : `pnpm --filter @verimesh/agent enrol <operator> ${nullifier}`,
+      note: "proof verified; no gateId supplied so no approval was recorded",
     });
   }
 
@@ -362,14 +377,8 @@ export async function POST(request: Request) {
   };
 
   const check = selfEnroll
-    ? selfEnrollCheck(collected, candidate, authzConfig as AuthzConfig, context)
-    : checkApproval(
-        requirement,
-        collected,
-        candidate,
-        authzConfig as AuthzConfig,
-        context
-      );
+    ? selfEnrollCheck(collected, candidate, config, context)
+    : checkApproval(requirement, collected, candidate, config, context);
 
   if (!check.accepted && check.rejection) {
     return NextResponse.json(
@@ -383,12 +392,12 @@ export async function POST(request: Request) {
           check.rejection,
           operator,
           required,
-          (authzConfig as AuthzConfig).budgetPerWindow
+          config.budgetPerWindow
         ),
         nullifier,
         enrolledFor,
         overrideCount: budget.counts[nullifier] ?? 0,
-        budgetPerWindow: (authzConfig as AuthzConfig).budgetPerWindow,
+        budgetPerWindow: config.budgetPerWindow,
         budgetSource: budget.source,
       },
       { status: REJECTION_STATUS[check.rejection] }
@@ -453,8 +462,9 @@ export async function POST(request: Request) {
     enrolledFor,
     selfEnrolled: selfEnroll,
     allowlistEnforced: !selfEnroll,
+    allowlistSource: configSource,
     overrideCount: budget.counts[nullifier] ?? 0,
-    budgetPerWindow: (authzConfig as AuthzConfig).budgetPerWindow,
+    budgetPerWindow: config.budgetPerWindow,
     budgetSource: budget.source,
     collected: distinct.length,
     requiredQuorum: gate.required_quorum,

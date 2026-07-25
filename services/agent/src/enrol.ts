@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createClient } from "@supabase/supabase-js";
 import { normalizeNullifier, type AuthzConfig } from "@verimesh/shared";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -60,6 +61,7 @@ function usage(): void {
   console.log("usage:");
   console.log("  pnpm --filter @verimesh/agent enrol --list");
   console.log("  pnpm --filter @verimesh/agent enrol <operator> <nullifier>");
+  console.log("  pnpm --filter @verimesh/agent enrol --last <operator>");
   console.log(
     "  pnpm --filter @verimesh/agent enrol --remove <operator> <nullifier>"
   );
@@ -71,11 +73,63 @@ function usage(): void {
   console.log(
     'only { "idkitResponse": ... } returns the canonical nullifier and records nothing.'
   );
+  console.log(
+    "That scan is logged as a `worldid` event, so `--last <operator>` enrols whoever"
+  );
+  console.log(
+    "just scanned without anyone retyping 66 characters of hex at a booth."
+  );
 }
 
-function main(): void {
+async function lastScannedNullifier(): Promise<string | undefined> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_KEY;
+  if (!url || !key) {
+    console.error(
+      "--last needs NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_KEY"
+    );
+    return undefined;
+  }
+
+  const supabase = createClient(url, key, { auth: { persistSession: false } });
+  const { data, error } = await supabase
+    .from("events")
+    .select("message,ts")
+    .eq("type", "worldid")
+    .order("ts", { ascending: false })
+    .limit(1);
+
+  if (error) {
+    console.error(`could not read the events feed: ${error.message}`);
+    return undefined;
+  }
+
+  const message = (data ?? [])[0]?.message as string | undefined;
+  const match = message?.match(/0x[0-9a-fA-F]{64}/);
+  if (!match) {
+    console.error(
+      "no World ID identity check on record — scan once with no gate open first"
+    );
+    return undefined;
+  }
+  return match[0];
+}
+
+async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const config = load();
+
+  if (args[0] === "--last") {
+    const operator = args[1];
+    if (!operator) {
+      usage();
+      process.exit(1);
+    }
+    const nullifier = await lastScannedNullifier();
+    if (!nullifier) process.exit(1);
+    console.log(`last identity checked: ${nullifier}`);
+    args.splice(0, 2, operator, nullifier);
+  }
 
   if (args.length === 0 || args[0] === "--list") {
     report(config);
@@ -179,4 +233,7 @@ function main(): void {
   report(config);
 }
 
-main();
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
