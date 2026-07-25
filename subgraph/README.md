@@ -17,10 +17,12 @@ This is a standalone npm project — it is **not** part of the pnpm workspace. R
 ```
 cd subgraph
 npm install
-npx graph auth <SUBGRAPH_DEPLOY_KEY>
+npx graph auth --studio <SUBGRAPH_DEPLOY_KEY>
 npx graph codegen && npx graph build
 npx graph deploy verimesh
 ```
+
+`--studio` is required on the pinned graph-cli 0.80.x: without it the single positional argument is read as a node URL and the CLI hangs on an interactive prompt for the key. The bare `graph auth <key>` form is >=0.9x. Check `npx graph --version` first.
 
 Create the subgraph in Subgraph Studio first to get the slug and the deploy key. Deploying gives a **development query URL** → that is `SUBGRAPH_URL` / `NEXT_PUBLIC_SUBGRAPH_URL`, and publishing it unblocks A3.5, A5, B6.2, B7 and C5.1.
 

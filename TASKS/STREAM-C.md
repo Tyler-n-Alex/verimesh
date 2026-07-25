@@ -58,6 +58,14 @@ your own subgraph-truth check.
       · ⚠️ **Do not `graph deploy` before the registry address is real.** A subgraph pointed at
       `0x000…0` deploys cleanly and indexes nothing — a false green at G2, and you would then debug
       the mappings, which are fine.
+      · **15:45 — `graph auth` is DONE.** Studio subgraph created by the human, deploy key in
+      `.env.local`, `Deploy key set for https://api.studio.thegraph.com/deploy/`. `codegen` + `build`
+      re-verified after auth. **The only command left is `npx graph deploy <slug>`**, and the only
+      input left is B2.1's address.
+      · 🪤 **`graph auth <KEY>` hangs forever on our pinned graph-cli 0.80.x** — a lone positional
+      argument is read as the *node URL* and the CLI then blocks on an interactive prompt for the
+      key, with no output. Use `npx graph auth --studio <KEY>`. Recorded in the `subgraph` skill and
+      `subgraph/README.md`; the bare form in the skill was the >=0.9x syntax.
 
 ---
 

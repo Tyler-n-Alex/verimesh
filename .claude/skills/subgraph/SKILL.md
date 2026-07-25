@@ -80,6 +80,22 @@ graph auth <DEPLOY_KEY>
 graph deploy verimesh
 ```
 
+⚠️ **`graph auth <DEPLOY_KEY>` hangs forever on the version this repo pins.** `subgraph/package.json`
+pins `@graphprotocol/graph-cli@^0.80`, whose signature is `graph auth [NODE] [DEPLOY-KEY]` — a single
+positional argument is read as the **node URL**, and the CLI then waits on an interactive prompt for
+the key. Under an agent or any non-TTY shell that is an indefinite hang with no output, not an error.
+
+On 0.80.x the working form is:
+
+```
+npx graph auth --studio <DEPLOY_KEY>
+```
+
+It warns that `--studio` is removed in the next major — that warning is correct, and the bare
+`graph auth <DEPLOY_KEY>` above is the >=0.9x form. **Check `npx graph --version` before copying
+either line.** Verified working on 0.80.1, 25 Jul: `Deploy key set for
+https://api.studio.thegraph.com/deploy/`.
+
 Create the subgraph in Subgraph Studio first to get the slug and `DEPLOY_KEY`
 (→ `SUBGRAPH_DEPLOY_KEY`). Deploying gives a **development query URL** → `SUBGRAPH_URL`.
 

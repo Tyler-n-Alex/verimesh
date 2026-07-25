@@ -88,6 +88,9 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
       Then it is `npx graph auth <key> && npx graph deploy verimesh`, ~10 minutes.
       · ⚠️ **Do not deploy the subgraph before the registry exists.** With `address: 0x000…0` it
       deploys happily and indexes nothing — which looks like a passing G2 and is not one.
+      · **15:45 — step (2) is done.** Studio subgraph created, `graph auth` succeeded, `codegen` and
+      `build` re-verified. **B2.4 is now one command (`npx graph deploy <slug>`) behind one input:
+      your registry address.** Nothing else stands between us and the G2 gate.
 - [ ] **B2.5** ⚠️ **G2 · 17:00 GO/NO-GO.** The subgraph ships either way — this is a *hosting*
       contingency, not a feature cut. If B2.4 is not green:
       1. local `graph-node` via docker-compose against the same RPC — same manifest, same mappings,
