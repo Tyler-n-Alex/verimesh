@@ -209,9 +209,10 @@ you does on your own machine.
       blueprint's 16 nodes, 25 edges and a first telemetry row · done 13:45 · **run it to unblock A**
 - [ ] **H0.7** Fill in the Owners table above; everyone `.env` populated, `pnpm install`,
       `pnpm typecheck` green · 10m · owner: all
-- [ ] **H0.8** Commit `docs/IMPLEMENTATION_PLAN_THEGRAPH.md` (still modified locally — teammates
-      can't see the ✦ revision) with a header noting corrections 1–3 above supersede it
-      · 2m · owner: whoever holds the edit
+- [x] **H0.8** `docs/IMPLEMENTATION_PLAN_THEGRAPH.md` committed (`83a7685`) · done
+      · ⚠️ it still describes the **0G Chain registry**, **`verifyCloudProof`** and **The Graph's
+      Subgraph MCP server**. Corrections 1–3 at the top of this board supersede it. Read the board
+      and the skills, not the plan, for those three things.
 
 ### Distinctness is now enforced in three places
 
