@@ -174,6 +174,12 @@ with sleep in it. Move the owner tags in the stream files when you agree the swa
 
 ## Demo checklist (Sun 06:00 — rehearse, don't build)
 
+> **Run it from [`RUN-SHEET.md`](RUN-SHEET.md), not from this list.** Every step there has a pass
+> line — a specific thing you must see — plus the start order, the known traps, and what to do when
+> something breaks instead of debugging live. This list is the *what*; the run sheet is the *how*.
+> ⚠️ It also carries the one that will bite: **`pnpm seed` deletes `device-s22`'s edges**, so every
+> seed must be followed by `POST /api/device/register` or isolating the phone stops being a T2.
+
 - [ ] Scenario 1 runs clean: cascade → VIOLATION → freeze → **two distinct World ID scans** → commit
 - [ ] Scenario 2 runs clean: `recurring_fault` → agent cites prior incident in the trace
 - [ ] Live GraphQL query in the audit drawer, run on stage, returns real indexed decisions

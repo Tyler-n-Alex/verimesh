@@ -138,6 +138,15 @@ your own subgraph-truth check.
 
 - [ ] **C6.1** Be the one who runs the demo checklist in `BOARD.md` cold, twice, on the demo
       machine. You are the correctness lane — you are the right person to disbelieve it · 60m
+      · **run sheet drafted 21:15 → [`RUN-SHEET.md`](RUN-SHEET.md).** Every step has a pass line, so
+      a 04:00 run is mechanical rather than a judgement call. The run itself still needs the stack
+      end-to-end, which is `B5.5`/`B5.6`
+      · 🚨 **found while writing it: `pnpm seed` silently breaks the physical-device demo.** The seed
+      deletes every edge and reinserts only the blueprint's 25, which removes `device-s22`'s
+      cross-operator link to `node-11` — the edge that makes isolating the phone a T2. Nothing
+      errors and the phone still renders. Every seed must be followed by
+      `POST /api/device/register`. It was documented in `DEVICE-NODE.md` as a note for B; it now
+      also sits in the run sheet as a required step, because at 04:00 nobody reads §📌
 - [x] **C6.2** Write the two rehearsed booth lines from plan §1B into the submission draft: the
       "why does this need a blockchain" kill-shot and the memory line · 20m · done 14:40
       · `docs/SUBMISSION.md` — also carries the 0G/Base seam line and the *custom* MCP server wording
