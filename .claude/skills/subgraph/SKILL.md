@@ -22,6 +22,9 @@ demo laptop), **the registry deploys to a Studio-supported testnet** and Studio 
 `https://sepolia.basescan.org`). Arbitrum Sepolia (`421614`) is equally fine — take whichever
 faucet funds you first, the code is identical.
 
+Faucets, the deploy toolchain, and the commit-transaction path live in
+[`../base/SKILL.md`](../base/SKILL.md). This file owns everything downstream of the deploy receipt.
+
 **This does not weaken the 0G integration.** 0G Compute (TEE-attested inference) and 0G Storage
 (immutable audit blobs) are untouched, and those are the substantive 0G work — the registry is a
 contract that only `emit`s. The `Committed` event still carries `zerogRoot`, so **every indexed row
