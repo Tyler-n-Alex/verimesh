@@ -117,7 +117,10 @@ around it silently and leave the next person to rediscover it.
 
 | Time | Who | Blocked on | Needs |
 |---|---|---|---|
-| | | | |
+| 17:15 | A | **A3.6.1** — the live World ID scan | `NEXT_PUBLIC_WORLDID_APP_ID`, `WORLDID_RP_ID`, `WORLDID_SIGNING_KEY` in the root `.env.local`, from the Developer Portal. Routes + widget are built and typechecked against IDKit 4.2.1; they return `503` naming the missing vars until these land. |
+| 17:15 | A | **B4** — the actual 0G Storage upload | `ZEROG_PRIVATE_KEY` + a funded 0G wallet. Faucet caps ~0.1 OG/day/wallet, so claim early. Write and read-back routes are built; they `503` until the key is set. |
+| 17:15 | A→B | **A3.6.2 / A3.6.3** allowlist enforcement | **B5.6 enrolment.** `authz_config.json`'s operator arrays are all empty, and while they are, `/api/worldid/verify` accepts *any* verified human and returns the normalised `nullifier` so you can paste it straight in. **T1/T2 do not actually enforce "which human" until both arrays are populated.** |
+| 17:15 | A | *not blocked* — **B2.6 `SUBGRAPH_URL`** | Every Graph view runs against a fixture matching `schema.graphql` and flips to live when the URL is set. No wait, no rework. Logged here only so nobody re-plans around it. |
 | 14:40 | C | **B2.4 subgraph deploy** — mappings, ABI and manifest are done and `graph codegen && graph build` both pass locally | `REGISTRY_ADDRESS` **and the deployment block number** from B2.1, plus a `SUBGRAPH_DEPLOY_KEY` from Studio. ~10 min of work once those exist. **This is the G2 17:00 gate** |
 | 14:40 | C | **C5.1 / C5.2 acceptance harness** — written and unit-tested against a stub endpoint, cannot be run for real | `SUBGRAPH_URL` (B2.4), one committed decision (B6.5), one resolved override (B5.5) |
 | 14:40 | C → A | `DECISION_AUDIT_QUERY` in `apps/web/src/lib/subgraph.ts` declares `$decisionId: Bytes!` but uses it for `decisions(where: { id: ... })`, and `Decision.id` is `ID!` in the frozen schema — the subgraph will reject that variable type the moment it is live | A: split it into `$decisionId: ID!` for the `decisions` filter and a separate `Bytes!` variable for `freezes`/`approvals`/`overrides`. Not urgent until `SUBGRAPH_URL` exists, but it will look like "the subgraph is broken" at 3am |
