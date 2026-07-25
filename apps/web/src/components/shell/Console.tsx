@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { TopBar } from "@/components/shell/TopBar";
 import { Panel, EmptyState } from "@/components/ui/Panel";
-import { NodeList } from "@/components/panels/NodeList";
+import { MeshViewport } from "@/components/mesh/MeshViewport";
 import { useMeshRealtime } from "@/hooks/useMeshRealtime";
 import { operatorCounts, statusCounts, useMeshStore } from "@/store/mesh";
 
@@ -40,8 +40,8 @@ export function Console() {
           </Panel>
         </div>
 
-        <Panel label="mesh" bodyClassName="grid-floor">
-          <NodeList />
+        <Panel label="mesh" scroll={false}>
+          <MeshViewport />
         </Panel>
 
         <div className="flex min-h-0 flex-col gap-2">

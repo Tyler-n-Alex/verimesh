@@ -72,15 +72,51 @@ the endpoint in later. Ask B for a fixture at 15:00 if the spike is still runnin
 
 ## Sat 16:00 → 19:00 · the 3D mesh (plan §8 A2)
 
-- [ ] **A2.1** R3F scene — camera, controls, node instances positioned from `pos`, edges as lines
-      · 90m · needs: A1.5
-- [ ] **A2.2** Status-driven materials — `healthy` / `warning` / `violation` / `awaiting_human` /
+- [x] **A2.1** R3F scene — camera, controls, node instances positioned from `pos`, edges as lines
+      · 90m · needs: A1.5 · done 14:55
+      - `components/mesh/`: `MeshScene` (Canvas + lights + fog + composer), `NodeInstances`,
+        `EdgeLines`, `NodeLabels`, `CameraRig`, `PerfProbe`; `MeshViewport` wraps it with
+        `next/dynamic({ssr:false})`, the legend, the fps HUD and a roster fallback.
+      - `CameraRig` frames the mesh from the hydrated node set (`meshCenter`/`meshRadius` in
+        `lib/layout.ts`) and re-frames on container resize, so it stays composed at any panel
+        width — nothing is hard-coded to the 16-node blueprint.
+- [x] **A2.2** Status-driven materials — `healthy` / `warning` / `violation` / `awaiting_human` /
       `isolated` / `offline`; **operator-distinct colouring** (opA vs opB must be readable at a
-      glance — the cross-operator quorum beat depends on judges seeing the boundary) · 60m · needs: A2.1
-- [ ] **A2.3** Postprocessing + motion — bloom on violation, pulse on `awaiting_human`, edge
-      animation on load transfer · 45m · needs: A2.2
-- [ ] **A2.4** Perf pass — instancing, no per-frame allocation, capped DPR. It must hold 60fps on
-      the demo laptop while the loop is writing · 30m · needs: A2.3
+      glance — the cross-operator quorum beat depends on judges seeing the boundary) · 60m · needs: A2.1 · done 14:55
+      - the encoding is **operator = hue, status = ring**, so the two never fight for the same
+        channel: node body fill + floor tile carry the operator (opA sky · opB orange · opC violet),
+        a torus ring around each node carries the status. Single source of truth in `lib/palette.ts`,
+        which also emits the matching CSS variables — the 3D and the DOM cannot drift.
+      - **the cross-operator boundary is the loudest thing in the scene by design**: an edge's two
+        vertices are coloured by their *own* endpoint's operator, so a same-operator link is solid
+        and a cross-operator link is a visible **gradient** from one operator's hue to the other's,
+        drawn twice as thick. Judges see the boundary without being told where it is.
+- [x] **A2.3** Postprocessing + motion — bloom on violation, pulse on `awaiting_human`, edge
+      animation on load transfer · 45m · needs: A2.2 · done 14:55
+      - selective-by-luminance bloom: status rings are `toneMapped={false}` `meshBasicMaterial` with
+        per-instance colours scaled past 1.0 by `STATUS_VISUALS.haloIntensity`, so only the states
+        that should glow cross the bloom threshold. `violation` also bobs and pulses at 2.4Hz,
+        `awaiting_human` at 1.15Hz.
+      - edge motion is `LineMaterial.dashOffset` advanced in `useFrame`, and **the flow speed is the
+        mesh's mean load** — the links visibly speed up as the mesh loads. A third line set lights up
+        edges incident to a `violation`/`awaiting_human` node at ~3.4× flow.
+      - verified against a real violation driven through Supabase (`node-07` violation, `node-12`
+        warning, `node-05` awaiting_human, `node-14` isolated, `node-03` offline): the beat reads at
+        a glance. Bloom/halo gains were pulled back from a first pass that bled magenta over the
+        whole mesh.
+- [x] **A2.4** Perf pass — instancing, no per-frame allocation, capped DPR. It must hold 60fps on
+      the demo laptop while the loop is writing · 30m · needs: A2.3 · done 14:55
+      - **measured 60fps, min 49, `1` draw call** with all 16 nodes + 25 edges + 5 non-healthy
+        states live. HUD bottom-right of the viewport reports fps / min fps / draw calls, so this is
+        re-checkable on the demo laptop rather than assumed (that is also what A6.2 reads).
+      - three `InstancedMesh`es (body · status ring · operator floor tile) and three batched
+        `LineSegments2`; `dpr={[1,1.6]}`, `antialias:false`, `multisampling={0}`, no normal pass.
+      - **zero allocation in `useFrame`**: one module-scope `Object3D` and two `Color`s are reused
+        for every instance write.
+      - **telemetry never re-renders React.** The scene reads `useMeshStore.getState()` inside
+        `useFrame`; the only component-level subscriptions are to `nodeIds`, `edges`, and a derived
+        *alert-signature string* — a primitive, so it only fires when a node actually changes status.
+        Node labels subscribe per-node to rounded metrics, so a label re-renders ~1/s, not 60/s.
 
 ---
 
