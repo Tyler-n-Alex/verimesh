@@ -23,22 +23,24 @@ Order below is the order to do it in. B2 starts early and runs in parallel with 
 
 New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it debugging.
 
+- [ ] **B2.0** Fund a deploy wallet on **Base Sepolia** (`84532`) from a faucet. If it stalls, use
+      **Arbitrum Sepolia** (`421614`) instead — identical code, take whichever funds first. Also
+      confirm the exact Graph network slug (`base-sepolia` / `arbitrum-sepolia`) from the
+      supported-networks page with **"Show Testnets"** toggled — a wrong slug fails at deploy · 15m
 - [ ] **B2.1** Hardhat (or Foundry) project in `contracts/`; deploy `VerimeshRegistry` to
-      **0G Chain testnet**; record `REGISTRY_ADDRESS` in `.env.example` · 45m · needs: H0.2
-- [ ] **B2.2** Script emits one `Committed` event; confirm the tx in the 0G explorer · 15m · needs: B2.1
+      **Base Sepolia** (⚠️ **not 0G Chain** — see BOARD correction #2); record `REGISTRY_ADDRESS`
+      **and the deployment block number** in `.env.example` · 45m · needs: H0.2, B2.0
+- [ ] **B2.2** Script emits one `Committed` event; confirm the tx on Basescan · 15m · needs: B2.1
 - [ ] **B2.3** Subgraph: `subgraph.yaml` pointed at the deployed address + AssemblyScript mappings
       for all four events · 60m · needs: H0.3, B2.1 · **owner: C** (G1 rebalance)
-- [ ] **B2.4** Deploy the subgraph — ⚠️ **local `graph-node` via docker-compose against the 0G Chain
-      RPC. This is the primary path, NOT the fallback.** 0G Chain is not on The Graph's
-      supported-networks list, so **Subgraph Studio will reject it**. Query in GraphiQL and get
-      B2.2's seeded event back · 60m · needs: B2.3 · **owner: C** · ⚠️ **feeds G2 at 17:00**
-- [ ] **B2.4a** Pull the docker images (graph-node + IPFS + Postgres) **in the background now**,
-      while B2.3 is being written. Do not start this at 16:45 · 5m
-- [ ] **B2.5** ⚠️ **G2 · 17:00 GO/NO-GO.** This is a *chain-selection* contingency, not a feature
-      cut — the subgraph ships either way. If B2.4 is not green, take the ladder **in order, now**:
-      1. redeploy the registry to a network that **is** on The Graph's supported-networks list and
-         index that instead — 0G keeps Compute + Storage, only the registry's host chain moves.
-         **Check the live list first; do not assume Sepolia or Arbitrum Sepolia are on it.**
+- [ ] **B2.4** Create the subgraph in **Subgraph Studio**, `graph auth <DEPLOY_KEY>`,
+      `graph codegen && graph build`, `graph deploy verimesh`. Query the dev URL in GraphiQL and get
+      B2.2's seeded event back · 30m · needs: B2.3 · **owner: C** · ⚠️ **feeds G2 at 17:00**
+      · ⚠️ **do not run `graph publish`** — publishing is mainnet-only and we do not need it
+- [ ] **B2.5** ⚠️ **G2 · 17:00 GO/NO-GO.** The subgraph ships either way — this is a *hosting*
+      contingency, not a feature cut. If B2.4 is not green:
+      1. local `graph-node` via docker-compose against the same RPC — same manifest, same mappings,
+         only the host changes (needs docker + IPFS + Postgres, so pull images before starting)
       2. mirror history in Supabase, subgraph stays a read-only proof of the pipeline
       · needs: B2.4
 - [ ] **B2.6** Publish `SUBGRAPH_URL` to the team — **A is blocked on this** and A cannot build the
@@ -91,8 +93,10 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
 - [ ] **B6.3** Diagnose + propose — the **one** LLM decision, via B3, telemetry + history in context
       · 45m · needs: B3, B6.2
 - [ ] **B6.4** `verify_constraints` call → C's verifier · 15m · needs: C1
-- [ ] **B6.5** `commit_state` — Supabase + 0G Storage blob + **registry `Committed` event** carrying
-      `authTier`; store `chain_tx_hash` · 60m · needs: B2.1, B4
+- [ ] **B6.5** `commit_state` — Supabase + 0G Storage blob + **registry `Committed` event** (Base
+      Sepolia) carrying `authTier` **and the `zerogRoot` from the 0G Storage write**; store
+      `chain_tx_hash`. The `zerogRoot` is what links the indexed row back to 0G — do not drop it
+      · 60m · needs: B2.1, B4
 - [ ] **B6.6** Freeze branch — VIOLATION / low confidence → authz policy → collect quorum →
       re-verify → commit · 60m · needs: B5.5, B6.5
 - [ ] **B7.1** Write a **Verimesh MCP server** in `services/mcp` (currently a 1-line stub) exposing

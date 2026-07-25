@@ -1,6 +1,6 @@
 ---
 name: subgraph
-description: The Graph integration for Verimesh — the 0G Chain registry contract, subgraph manifest/schema/AssemblyScript mappings, local graph-node deployment, GraphQL history queries, and the Subgraph MCP get_history tool. Use for any task touching The Graph, subgraphs, graph-cli, indexing, GraphQL, agent memory, or the registry contract.
+description: The Graph integration for Verimesh — the Base Sepolia registry contract, subgraph manifest/schema/AssemblyScript mappings, Subgraph Studio deployment, GraphQL history queries, and the custom MCP get_history tool. Use for any task touching The Graph, subgraphs, graph-cli, indexing, GraphQL, agent memory, or the registry contract.
 ---
 
 # The Graph — the agent's trustless memory
@@ -12,31 +12,35 @@ Covers plan §6.2, §6.3, §9 B2/B6/B7, §8 A3.5/A5, §9C. Tasks `B2.*`, `B6.2`,
 > the supported-networks list. If the toolchain fights you, re-read the live docs and **update
 > this file**.
 
-## 🚨 READ THIS BEFORE `B2.4` — Subgraph Studio will not take 0G Chain
+## 🚨 The registry is NOT on 0G Chain — decided 25 Jul
 
-**0G Chain / Galileo is not on The Graph's supported-networks list.** Subgraph Studio only accepts
-listed networks. The board's "Studio first, local graph-node as fallback" ordering is **backwards**
-and will cost you the G2 gate.
+**0G Chain / Galileo is not on The Graph's supported-networks list**, so Subgraph Studio rejects it.
+Rather than self-host a `graph-node` (docker + IPFS + Postgres, 1–3h, and a live dependency on the
+demo laptop), **the registry deploys to a Studio-supported testnet** and Studio hosts the subgraph.
 
-**Correct order for our stack:**
+**Default: Base Sepolia** (`84532`, RPC `https://sepolia.base.org`, explorer
+`https://sepolia.basescan.org`). Arbitrum Sepolia (`421614`) is equally fine — take whichever
+faucet funds you first, the code is identical.
 
-1. **Local `graph-node` via docker-compose, pointed at the 0G Chain RPC.** This is the *primary*
-   path, not a fallback. Graph Node indexes any EVM-equivalent chain exposing standard JSON-RPC —
-   which 0G Chain does. Start here.
-2. If docker is fighting you at G2 (17:00): **redeploy the registry to a Studio-supported network**
-   and index that instead. 0G keeps Compute + Storage, so the 0G story survives intact; only the
-   registry's host chain moves. Check the live supported-networks page for a testnet — do not
-   assume Sepolia or Arbitrum Sepolia are on it, the list changes.
-3. Absolute last resort: mirror history in Supabase, subgraph stays a read-only proof.
+**This does not weaken the 0G integration.** 0G Compute (TEE-attested inference) and 0G Storage
+(immutable audit blobs) are untouched, and those are the substantive 0G work — the registry is a
+contract that only `emit`s. The `Committed` event still carries `zerogRoot`, so **every indexed row
+points into 0G Storage**.
 
-Local graph-node needs **docker + IPFS + Postgres**. Pull those images *now*, in the background,
-while you write the mappings — not at 16:45.
+Say the seam out loud rather than hiding it: *"the decision record is indexed where The Graph can
+serve it; the immutable payload lives on 0G, and every indexed row carries its 0G root."*
+
+**If Studio deploy fails at G2 (17:00):** fall back to local `graph-node` via docker-compose against
+the same RPC. Same manifest, same mappings — only the host changes. Last resort: mirror history in
+Supabase and keep the subgraph as a read-only proof.
 
 ## The pipeline
 
 ```
-agent commit → registry contract (0G Chain) → event
-             → graph-node indexes → subgraph entities
+agent commit → registry contract (Base Sepolia) → event  ─┐
+                                                          │ carries zerogRoot
+0G Storage blob ──────────────────────────────────────────┘
+             → Studio-hosted subgraph indexes → entities
              → GraphQL  ─┬─→ agent get_history  (step 3 of the loop)
                          └─→ frontend audit views
 ```
@@ -69,8 +73,16 @@ npm install -g @graphprotocol/graph-cli@latest
 graph --version
 graph init
 graph codegen && graph build
-graph deploy <SUBGRAPH_SLUG>
+graph auth <DEPLOY_KEY>
+graph deploy verimesh
 ```
+
+Create the subgraph in Subgraph Studio first to get the slug and `DEPLOY_KEY`
+(→ `SUBGRAPH_DEPLOY_KEY`). Deploying gives a **development query URL** → `SUBGRAPH_URL`.
+
+Do **not** attempt `graph publish`. Publishing to the decentralized network is mainnet-only — a
+testnet-indexing subgraph cannot be published, which is also why The Graph's own MCP server can
+never reach ours (see below). The Studio dev endpoint is all we need and all we can have.
 
 `graph codegen` regenerates `../generated/*` from the ABI + schema. **Re-run it after every
 contract or schema change** — stale generated types are the single most common way this toolchain
@@ -115,9 +127,9 @@ dataSources:
 
 Two traps in there:
 
-- **`network:`** — for a local graph-node against a custom chain, this must match the network name
-  configured in your `docker-compose.yml`, *not* a public network name. On a local node the
-  convention is to use `mainnet` and point the node's `ethereum` env var at the 0G RPC.
+- **`network:`** — must be the exact slug The Graph uses, `base-sepolia` (or `arbitrum-sepolia`).
+  **Copy it from the supported-networks page with "Show Testnets" toggled on** — a wrong slug fails
+  at deploy time. The `mainnet` in the example above is from The Graph's docs; change it.
 - **`startBlock`** — set it to the registry's actual deployment block, not `0`. Starting at 0 makes
   the node re-scan the whole chain and your event will not appear for a very long time. Grab the
   block number from the deploy receipt in `B2.1`.
@@ -187,10 +199,11 @@ the loop, then expose it as an MCP tool in `B7`.
 `get_schema_by_subgraph_id`, `search_subgraphs_by_keyword` and six others. **There is no config
 option pointing it at an arbitrary or self-hosted GraphQL endpoint.**
 
-So plan §0's "Query path: The Graph's Subgraph MCP server (`get_history` tool)" is **not reachable**
-for our subgraph — not on a local graph-node, and not from a Studio dev endpoint either. It would
-require *publishing* to the decentralized network, which needs a supported chain and GRT curation.
-Out of scope at this deadline.
+The gateway only serves subgraphs **published to the decentralized network**, and publishing is
+**mainnet-only** — a testnet-indexing subgraph can never be published. So plan §0's "Query path:
+The Graph's Subgraph MCP server (`get_history` tool)" is unreachable for us on *any* chain we can
+realistically use. Moving to Base Sepolia does not change this; nothing short of a mainnet
+deployment plus GRT curation would.
 
 **What we do instead:** write a small MCP server in `services/mcp` (already scaffolded) exposing
 `get_history` over our subgraph's GraphQL endpoint. Same architecture, same agent-memory story, ~45
@@ -222,11 +235,14 @@ exactly the thing this project claims to have solved.
 ## Env
 
 ```
-ZEROG_CHAIN_RPC=https://evmrpc-testnet.0g.ai
-ZEROG_CHAIN_ID=16602
+REGISTRY_CHAIN_RPC=https://sepolia.base.org
+REGISTRY_CHAIN_ID=84532
 REGISTRY_ADDRESS=
 REGISTRY_PRIVATE_KEY=
+REGISTRY_EXPLORER=https://sepolia.basescan.org
 SUBGRAPH_URL=
+SUBGRAPH_DEPLOY_KEY=
+NEXT_PUBLIC_SUBGRAPH_URL=
 GRAPH_MCP_ENDPOINT=
 ```
 

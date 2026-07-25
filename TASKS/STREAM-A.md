@@ -62,7 +62,7 @@ publishes it. Ask B for the fixture at 15:00 if the spike is still running.
       had in context, inline in the trace. Judges must *see* the memory being consulted, not just
       hear it claimed · 45m · needs: A3.1, B6.2
 - [ ] **A5.1** **Audit drawer** — click any decision → live GraphQL query → the indexed record,
-      the 0G blob, the 0G Chain tx (explorer link), ✦ the distinct signers and the tier · 60m
+      the 0G Storage blob, the registry tx (Basescan link), ✦ the distinct signers and the tier · 60m
       · needs: A3.5.1
 - [ ] **A5.2** Show the raw GraphQL query text in the drawer, copyable — the "any operator can run
       this exact query" framing only lands if they can see the query · 20m · needs: A5.1
@@ -71,8 +71,9 @@ publishes it. Ask B for the fixture at 15:00 if the spike is still running.
 
 ## Sat 21:00 → Sun 01:00 · ✦ World ID + the quorum modal (plan §8 A3.6)
 
-- [ ] **B5.1** *(picked up)* `/api/worldid/sign` + `/api/worldid/verify` with `verifyCloudProof`
-      · 45m
+- [ ] **B5.1** *(picked up)* `/api/worldid/sign` (RP context via `signRequest` from
+      `@worldcoin/idkit-core/signing`) + `/api/worldid/verify` (POST
+      `developer.world.org/api/v4/verify/{rp_id}`) · 45m · unblocks: A3.6.1
 - [ ] **A3.6.1** IDKit widget wired to those routes; one successful scan end-to-end · 45m · needs: B5.1
 - [ ] **A3.6.2** **Freeze modal, T1** — renders the required tier, a single slot, and the
       operator-allowlist check · 45m · needs: A3.6.1, B5.4

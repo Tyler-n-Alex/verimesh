@@ -30,25 +30,33 @@ Verimesh-specific wiring and the traps.
 | Skill | Load it for |
 |---|---|
 | [`world-id`](../.claude/skills/world-id/SKILL.md) | IDKit 4.x, RP signing, nullifiers, the T0/T1/T2 gate, the quorum |
-| [`zerog`](../.claude/skills/zerog/SKILL.md) | 0G Compute broker + attestation, 0G Storage blobs, 0G Chain/Galileo |
-| [`subgraph`](../.claude/skills/subgraph/SKILL.md) | registry events, manifest, AssemblyScript mappings, graph-node, GraphQL, MCP |
+| [`zerog`](../.claude/skills/zerog/SKILL.md) | 0G Compute broker + TEE attestation, 0G Storage blobs |
+| [`subgraph`](../.claude/skills/subgraph/SKILL.md) | registry events, manifest, AssemblyScript mappings, Studio deploy, GraphQL, MCP |
 
-**Two corrections these turned up — they change tasks already on this board:**
+**Three corrections these turned up — they change tasks already on this board:**
 
 1. **World ID v4 killed `verifyCloudProof`.** The plan (§5, §9 B5) cites the v3 API. Verification
    is now `POST https://developer.world.org/api/v4/verify/{rp_id}`, the widget will not open
    without a backend-signed `rp_context`, and the field is `nullifier` (hex), not `nullifier_hash`.
    **Consequence:** `B5.1` now hard-blocks `A3.6.1` — there is no "render the widget first" path.
-2. **Subgraph Studio will not accept 0G Chain.** Galileo is not on The Graph's supported-networks
-   list. `B2.4`'s "Studio first" was backwards — **local `graph-node` via docker is the primary
-   path.** Pull the docker images now, not at 16:45. *The subgraph itself is unaffected* — same
-   graph-cli, same manifest, same mappings, same GraphQL. Only the host changes.
-3. **The Graph's own Subgraph MCP server cannot query our subgraph.** `graphops/subgraph-mcp` hits
-   the Graph Network gateway by subgraph ID and has no arbitrary-endpoint option, so plan §0's
-   "query path = The Graph's Subgraph MCP server" is unreachable without publishing to the
-   decentralized network. **`B7` becomes: write our own MCP server** over our GraphQL endpoint
-   (`services/mcp` is already scaffolded for it, ~45m). Submission wording must say *custom MCP
-   server*, not *The Graph's*.
+2. **🚨 DECIDED 25 Jul — the registry moves off 0G Chain to Base Sepolia.** Galileo is not on The
+   Graph's supported-networks list, so Studio rejects it. Rather than self-host graph-node (docker +
+   IPFS + Postgres, 1–3h, and a live dependency on the demo laptop), the registry deploys to
+   **Base Sepolia (`84532`)** — or Arbitrum Sepolia (`421614`), whichever faucet funds first — and
+   **Studio hosts the subgraph**. `graph deploy` is ~15 minutes and gives a hosted URL judges can
+   hit themselves.
+   **This does not weaken 0G.** 0G Compute (TEE-attested inference) + 0G Storage (audit blobs) are
+   untouched and are the substantive 0G work; the registry only `emit`s. The `Committed` event still
+   carries `zerogRoot`, so every indexed row points into 0G Storage.
+   **Booth line for the seam:** *"the decision record is indexed where The Graph can serve it; the
+   immutable payload lives on 0G, and every indexed row carries its 0G root."*
+3. **The Graph's own Subgraph MCP server cannot query our subgraph — on any chain we can use.**
+   `graphops/subgraph-mcp` hits the Graph Network gateway by subgraph ID and has no
+   arbitrary-endpoint option. The gateway only serves subgraphs **published** to the decentralized
+   network, and publishing is **mainnet-only** — a testnet subgraph can never be published. So
+   `graph publish` is not attempted, and **`B7` becomes: write our own MCP server** over our GraphQL
+   endpoint (`services/mcp` is already scaffolded for it, ~45m). Submission wording must say
+   *custom MCP server*, not *The Graph's*.
 
 Also: the 0G npm scope is **`@0gfoundation`**, not `@0glabs` as the plan's appendix says.
 
@@ -71,7 +79,7 @@ around it silently and leave the next person to rediscover it.
 5. **Load the relevant skill before writing sponsor code.** `world-id`, `zerog`, `subgraph`.
 6. **Task line format** — keep it exactly this shape so agents can parse it:
    ```
-   - [ ] **B2.1** Deploy registry to 0G Chain testnet · 45m · needs: H0.2 · unblocks: B2.3
+   - [ ] **B2.1** Deploy registry to Base Sepolia · 45m · needs: H0.2 · unblocks: B2.3
    ```
    * claim it → append ` · **WIP @name HH:MM**`
    * finish it → flip to `- [x]` and replace the WIP tag with ` · done HH:MM`
@@ -100,7 +108,7 @@ around it silently and leave the next person to rediscover it.
 | Gate | When | Test | If it fails |
 |---|---|---|---|
 | **G1 · Contract freeze** | Sat **13:30** | `pnpm typecheck` green with ✦ authz types; registry + `schema.graphql` match | Nobody starts real work until this passes. It blocks all three streams. |
-| **G2 · THE GRAPH GO/NO-GO** | Sat **17:00** *(hard)* | A **local graph-node** indexes a real event from our registry and a GraphQL query returns it | Take the ladder in `STREAM-B.md` B2.5 **immediately** — move the registry to a Graph-supported chain. Do not keep debugging docker. |
+| **G2 · THE GRAPH GO/NO-GO** | Sat **17:00** *(hard)* | A **Studio-hosted subgraph** indexes a real event from our Base Sepolia registry and a GraphQL query returns it | Fall back to local `graph-node` via docker against the same RPC (`STREAM-B.md` B2.5). Same manifest, same mappings — only the host changes. |
 | **G3 · End-to-end** | Sun **02:00** | `ambiguous_cascade` runs headless: detect → history → LLM → verify → freeze → World ID → commit → on-chain → indexed | Cut to the demo-only path: seed the history, hand-drive the scenario in the UI. |
 
 ---
@@ -158,7 +166,7 @@ with sleep in it. Move the owner tags in the stream files when you agree the swa
 - [ ] Scenario 1 runs clean: cascade → VIOLATION → freeze → **two distinct World ID scans** → commit
 - [ ] Scenario 2 runs clean: `recurring_fault` → agent cites prior incident in the trace
 - [ ] Live GraphQL query in the audit drawer, run on stage, returns real indexed decisions
-- [ ] 0G Chain tx hashes open in the explorer
+- [ ] Registry tx hashes open on Basescan, and each indexed row's `zerogRoot` resolves in 0G Storage
 - [ ] Both World ID identities enrolled and tested on the actual demo machine
 - [ ] Video recorded (physical freeze + memory beat + quorum moment)
 - [ ] Submission: World + 0G + The Graph selected, subgraph endpoint + sample query + tx hashes

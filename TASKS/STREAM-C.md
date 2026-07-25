@@ -3,9 +3,9 @@
 Owner: `@____` · Protocol + scope: [`BOARD.md`](BOARD.md) · Spec: plan §7, §9C, §1D
 Skills: [`subgraph`](../.claude/skills/subgraph/SKILL.md) · [`world-id`](../.claude/skills/world-id/SKILL.md) — **load before B2.3/B2.4 and before `authz.ts`**
 
-> ⚠️ **Subgraph Studio will not accept 0G Chain** (Galileo is not on The Graph's supported-networks
-> list). Your B2.4 is **local `graph-node` via docker** — that is the primary path, not a fallback.
-> Pull the docker images now. Read the `subgraph` skill first.
+> ⚠️ **The registry is on Base Sepolia, not 0G Chain** (decided 25 Jul — The Graph does not support
+> 0G Chain). Your B2.4 is a **Subgraph Studio deploy**, ~30 min, no docker. Set `network:` to the
+> exact Graph slug and `startBlock` to the real deployment block. Read the `subgraph` skill first.
 
 You own the two deterministic, safety-relevant artifacts — the **verifier** and **`authz.ts`** — plus
 the acceptance harness that proves the whole thing is honest. You also picked up **B2.3/B2.4**
@@ -33,9 +33,10 @@ your own subgraph-truth check.
 
 - [ ] **B2.3** *(picked up)* AssemblyScript mappings for all four ✦ events → the entities in
       `schema.graphql`; `subgraph.yaml` pointed at B's deployed address · 60m · needs: H0.3, B2.1
-- [ ] **B2.4** *(picked up)* Deploy — **Subgraph Studio first**, local `graph-node` (docker) only if
-      Studio won't take 0G Chain. Query in GraphiQL, get B2.2's seeded event back · 60m · needs: B2.3
-      · ⚠️ **feeds G2 at 17:00**
+- [ ] **B2.4** *(picked up)* Create the subgraph in **Subgraph Studio**, `graph auth <DEPLOY_KEY>`,
+      `graph codegen && graph build`, `graph deploy verimesh`. Query the dev URL in GraphiQL, get
+      B2.2's seeded event back · 30m · needs: B2.3 · ⚠️ **feeds G2 at 17:00**
+      · ⚠️ **do not run `graph publish`** — mainnet-only, and we do not need it
 
 ---
 

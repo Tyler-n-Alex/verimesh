@@ -4,7 +4,7 @@ schema:
 dataSources:
   - kind: ethereum
     name: VerimeshRegistry
-    network: zerog-testnet
+    network: base-sepolia
     source:
       address: "0x0000000000000000000000000000000000000000"
       abi: VerimeshRegistry

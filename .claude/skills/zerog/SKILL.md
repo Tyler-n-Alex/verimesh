@@ -1,11 +1,19 @@
 ---
 name: zerog
-description: 0G integration for Verimesh — 0G Compute attested LLM inference, 0G Storage audit blobs, and the 0G Chain (Galileo) registry deployment. Use for any task touching 0G, the broker, attestation, zerogRoot, ZgFile, the inference call, or deploying the registry contract.
+description: 0G integration for Verimesh — 0G Compute attested LLM inference and 0G Storage audit blobs. Use for any task touching 0G, the compute broker, TEE attestation, zerogRoot, ZgFile, or the inference call. Note the decision registry lives on Base Sepolia, not 0G Chain — see the subgraph skill.
 ---
 
 # 0G — Compute, Storage, Chain
 
-Covers plan §9 B3/B4, §2. Tasks `B3`, `B4`, `B2.1`, `B2.2`, `B6.3`, `B6.5`.
+Covers plan §9 B3/B4, §2. Tasks `B3`, `B4`, `B6.3`, `B6.5`.
+
+> **🚨 Scope change, 25 Jul: the registry contract is no longer on 0G Chain.** The Graph does not
+> support 0G Chain, so the registry moved to Base Sepolia — see the `subgraph` skill. **0G Compute
+> and 0G Storage are unchanged and are our entire 0G integration.** The section below on 0G Chain
+> is kept for reference only; do not deploy the registry there.
+>
+> The link survives in the data: the `Committed` event carries `zerogRoot`, so every indexed
+> decision points back into 0G Storage. That is the sentence to say at the booth.
 
 > **Docs verified 2026-07-25** against <https://docs.0g.ai/developer-hub/building-on-0g/>.
 > If an import fails, re-read the live docs and **update this file**.
@@ -19,21 +27,21 @@ The base plan's appendix says `@0glabs/0g-ts-sdk`. Current packages are under **
 | Compute (inference) | `@0gfoundation/0g-compute-ts-sdk` |
 | Storage | `@0gfoundation/0g-storage-ts-sdk` |
 
-## 0G Chain — Galileo testnet
+## 0G Chain — Galileo testnet *(reference only — we do not deploy here)*
 
 | | |
 |---|---|
 | Chain ID | **16602** |
 | RPC | `https://evmrpc-testnet.0g.ai` |
 | Explorer | `https://chainscan-galileo.0g.ai` |
-| Gas token | test OG (faucet caps ~0.1/day/wallet — **fund the deploy wallet early**) |
+| Gas token | test OG (faucet caps ~0.1/day/wallet) |
 | Solidity | EVM-equivalent; 0.8.19+, cancun target, deploys unchanged |
 
-Chain IDs 16600 / 16601 / 80087 appear in older posts. **16602** is current. Confirm against the
-explorer before you burn time debugging a "wrong network" error.
+Chain IDs 16600 / 16601 / 80087 appear in older posts; **16602** is current.
 
-The faucet cap is a real schedule risk. Deploying, seeding events, and re-deploying after the ✦
-event-set change (`H0.2`) all cost gas. Claim tokens at the start of `B2.1`, not when you run out.
+Compute and Storage still need a funded 0G wallet — the broker's `depositFund` / `transferFund`
+and every storage upload cost gas. **The ~0.1/day faucet cap is a real schedule risk: claim tokens
+at the start of `B3`, not when a transaction fails at 02:00.**
 
 ## 0G Compute — attested inference
 
@@ -133,8 +141,9 @@ The `rootHash` is our `zerogRoot` — it goes into `commits.zerog_root`, into th
 | Store | Holds | Why |
 |---|---|---|
 | **Supabase** | hot operational state | the live loop and the 3D read it; low latency |
+| **0G Compute** | the LLM decision itself | TEE-attested — the inference is verifiable, not just remote |
 | **0G Storage** | full reasoning blob, immutable | no single operator can forge the record |
-| **0G Chain registry** | one event per decision | the write source The Graph indexes |
+| **Registry (Base Sepolia)** | one event per decision, carrying `zerogRoot` | the write source The Graph can index |
 | **The Graph** | queryable history | independently queryable by any operator |
 
 Judges will ask why all four. The answer is that they do different jobs: Supabase is fast but
@@ -148,16 +157,11 @@ ZEROG_RPC=https://evmrpc-testnet.0g.ai
 ZEROG_INDEXER=https://indexer-storage-testnet-turbo.0g.ai
 ZEROG_PRIVATE_KEY=
 ZEROG_COMPUTE_PROVIDER=
-ZEROG_CHAIN_RPC=https://evmrpc-testnet.0g.ai
-ZEROG_CHAIN_ID=16602
-REGISTRY_ADDRESS=
-REGISTRY_PRIVATE_KEY=
 LLM_PROVIDER=zerog
 ```
 
-`ZEROG_RPC` and `ZEROG_CHAIN_RPC` are the same endpoint — 0G Chain *is* the EVM chain the
-storage/compute contracts live on. Keep both keys so the config reads clearly, but do not go
-hunting for a second RPC that does not exist.
+`REGISTRY_CHAIN_RPC` / `REGISTRY_ADDRESS` are **not** 0G — they point at Base Sepolia. Two chains,
+two wallets, two faucets. Do not cross the private keys.
 
 ## Repo rules
 

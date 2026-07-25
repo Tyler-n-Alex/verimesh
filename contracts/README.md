@@ -5,7 +5,10 @@ Minimal EVM registry that emits one event per verified decision. It is the on-ch
 ## Spike steps (B2)
 
 1. Init a toolchain here: `npx hardhat init` (or `forge init`).
-2. Deploy `VerimeshRegistry.sol` to **0G Chain** testnet (EVM). Record the address and deploy block.
+2. Deploy `VerimeshRegistry.sol` to **Base Sepolia** (`84532`) — or Arbitrum Sepolia (`421614`),
+   whichever faucet funds first. **Not 0G Chain**: The Graph does not support it, and this contract
+   exists to be indexed. 0G Compute + 0G Storage are unaffected, and the `Committed` event carries
+   `zerogRoot` so every indexed row still points into 0G. Record the address and deploy block.
 3. Copy the compiled ABI to `../subgraph/abis/VerimeshRegistry.json`.
 4. Update `../subgraph/subgraph.yaml` with the address, `startBlock`, and network name.
 5. From the agent's `commit_state`, call `commitDecision` / `freezeNode` / `recordOverride`.
