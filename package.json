@@ -10,7 +10,8 @@
     "typecheck": "tsc -b",
     "clean": "tsc -b --clean",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "acceptance": "pnpm --filter @verimesh/verifier snapshot --from 44613204 --out ../../chain-snapshot.json && pnpm --filter @verimesh/verifier acceptance --input ../../chain-snapshot.json"
   },
   "devDependencies": {
     "ethers": "^6.17.0",

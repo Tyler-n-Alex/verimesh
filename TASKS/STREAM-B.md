@@ -138,6 +138,34 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
       already computed. `requirement.reason` is written to be shown verbatim in the freeze modal**
 - [ ] **B5.4** **T1 end-to-end** — single human, allowlist checked, gate resolves, commit proceeds
       · 45m · needs: B5.2, B5.3
+> **C, 21:00 — a definition of done for `B5.5`/`B5.6`/`B5.7`, so nobody has to take it on faith.**
+> One command, from the repo root:
+>
+> ```
+> pnpm acceptance
+> ```
+>
+> It reads the registry's logs straight over RPC, then checks them against the deployed subgraph and
+> against `authz_config.json`. **Three of its checks are exactly these three tasks**, and all three
+> are RED or vacuous today:
+>
+> | Check | Goes green when |
+> |---|---|
+> | `C5.2 authorization-trace` | `B5.5` actually calls `resolveOverride` — today it reports *0 human-authorized decisions*, because nothing has ever emitted a `HumanApproval` outside `seed-event.mjs` |
+> | `C5.2 allowlist-truth` | `B5.6` enrols the two nullifiers — today it is RED with *"authz_config has no enrolled nullifiers at all"*, which also means the verify route's `selfEnroll` fallback is currently letting **any** verified human authorize **any** gate |
+> | `C5.2 budget-truth` | `B5.7` enforces the budget. It cannot fail today: `fetchAuthzContext` is called with `nullifiers: []`, so `overrideCounts` is always empty and nothing is ever over budget. `GraphPanel` still *shows* each human's remaining budget |
+>
+> Nothing here is new scope — it is these three tasks not being finished yet. **I have deliberately
+> not touched `loop.ts` or `worldid/verify/route.ts`**; they are yours and you are in them.
+> Two notes that will save time when you get there:
+> - `resolveOverride` must use the **same** id string you already pass to `freezeNode` —
+>   `` `proposal-${proposalId}` `` — so the `Freeze`, `Approval` and `Override` rows join to the
+>   `Decision`. The subgraph and the audit drawer both key off that.
+> - Prefer `resolveGate(requirement, collected, config, context)` over `isSatisfied` in
+>   `processResolvedGates`. `isSatisfied` answers quorum and operator coverage only; it cannot see
+>   the config, so on its own it will resolve a gate on humans who are on nobody's allowlist. That
+>   is a real hole, not a style point — there is a regression test for it in `audit.test.ts`.
+
 - [ ] **B5.5** **T2 quorum** — gate stays open until it holds the required *distinct* nullifiers,
       one per affected operator; **reject a repeat nullifier**; emit `HumanApproval` per accepted
       signer + `OverrideResolved` on resolution · 90m · needs: B5.4 · **protect this — it is the World edge**
