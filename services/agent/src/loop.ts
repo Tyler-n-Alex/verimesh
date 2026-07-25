@@ -3,8 +3,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   authzConfig,
   isSatisfied,
+  resolveGate,
   requireAuthorization,
   type AuthTier,
+  type AuthorizationRequirement,
+  type AuthzContext,
   type HumanApproval,
   type Proposal,
 } from "@verimesh/shared";
@@ -71,6 +74,83 @@ async function fetchHistory(
   return toHistoryEntries(result);
 }
 
+interface GateRow {
+  id: number;
+  proposal_id: number;
+  status: string;
+  chosen_action: string | null;
+  required_tier: string;
+  required_quorum: number;
+  operators_required: string[] | null;
+  reason: string | null;
+}
+
+const OPEN_GATE_STATUSES = ["pending", "authorized"];
+
+function gateRequirement(gate: GateRow): AuthorizationRequirement {
+  return {
+    tier: gate.required_tier as AuthTier,
+    quorum: gate.required_quorum,
+    operatorsRequired: (gate.operators_required as string[]) ?? [],
+    reason: gate.reason ?? "",
+  };
+}
+
+async function collectedApprovals(
+  supabase: SupabaseClient,
+  gateId: number
+): Promise<HumanApproval[]> {
+  const { data } = await supabase
+    .from("human_approvals")
+    .select("nullifier,operator,chosen_action,ts")
+    .eq("gate_id", gateId)
+    .order("ts", { ascending: true });
+
+  return (data ?? []).map((row) => ({
+    nullifier: row.nullifier as string,
+    operator: row.operator as string,
+    chosenAction: (row.chosen_action as string) ?? "",
+    ts: Number(row.ts),
+  }));
+}
+
+function allowlistIsEnforceable(): boolean {
+  return Object.values(
+    (authzConfig as { operators: Record<string, string[]> }).operators
+  ).some((list) => list.length > 0);
+}
+
+function resolveCollected(
+  requirement: AuthorizationRequirement,
+  collected: HumanApproval[],
+  context: AuthzContext
+): ReturnType<typeof resolveGate> {
+  if (allowlistIsEnforceable()) {
+    return resolveGate(requirement, collected, authzConfig, context);
+  }
+  return {
+    resolved: isSatisfied(requirement, collected),
+    accepted: collected,
+    rejected: [],
+  };
+}
+
+async function authzContextFor(
+  nodeId: string,
+  nullifiers: string[]
+): Promise<AuthzContext> {
+  if (!SUBGRAPH_URL) return { incidentCount: 0, overrideCounts: {} };
+  try {
+    return await fetchAuthzContext(SUBGRAPH_URL, nodeId, nullifiers);
+  } catch (err) {
+    console.error(
+      "[agent] authz context unavailable",
+      err instanceof Error ? err.message : err
+    );
+    return { incidentCount: 0, overrideCounts: {} };
+  }
+}
+
 async function processResolvedGates(supabase: SupabaseClient): Promise<void> {
   const { data: gates } = await supabase
     .from("human_gates")
@@ -79,34 +159,49 @@ async function processResolvedGates(supabase: SupabaseClient): Promise<void> {
     .is("resolved_tx_hash", null)
     .limit(5);
 
-  for (const gate of gates ?? []) {
-    const proposal = gate.proposals as {
-      id: number;
-      node_id: string;
-      proposed_action: string;
-    } | null;
+  for (const gate of (gates ?? []) as (GateRow & {
+    proposals: { id: number; node_id: string; proposed_action: string } | null;
+  })[]) {
+    const proposal = gate.proposals;
     if (!proposal) continue;
 
-    const { data: approvals } = await supabase
-      .from("human_approvals")
-      .select("nullifier,operator,chosen_action,ts")
-      .eq("gate_id", gate.id);
+    const collected = await collectedApprovals(supabase, gate.id);
+    const requirement = gateRequirement(gate);
+    const context = await authzContextFor(
+      proposal.node_id ?? "",
+      collected.map((approval) => approval.nullifier)
+    );
+    const resolution = resolveCollected(requirement, collected, context);
+
+    if (!resolution.resolved) {
+      await supabase
+        .from("human_gates")
+        .update({ status: "blocked" })
+        .eq("id", gate.id);
+      await logEvent(
+        supabase,
+        "reject",
+        `gate ${gate.id} was marked resolved but the policy does not accept it: ${resolution.rejected
+          .map((r) => r.rejection)
+          .join(", ") || "quorum not met"}`,
+        proposal.node_id ?? undefined
+      );
+      continue;
+    }
 
     const chosen =
       gate.chosen_action ??
-      (approvals ?? [])[0]?.chosen_action ??
+      resolution.accepted[0]?.chosenAction ??
       proposal.proposed_action;
 
     await finalizeCommit(
       supabase,
       proposal.id,
       chosen,
-      gate.required_tier as AuthTier,
-      (approvals ?? []).map((a) => ({
-        nullifier: a.nullifier,
-        operator: a.operator,
-        chosenAction: a.chosen_action ?? chosen,
-        ts: Number(a.ts),
+      requirement.tier,
+      resolution.accepted.map((approval) => ({
+        ...approval,
+        chosenAction: approval.chosenAction || chosen,
       })),
       gate.id
     );
@@ -206,10 +301,12 @@ async function finalizeCommit(
       appliedAction,
       (proposal.target_nodes as string[]) ?? [proposal.node_id]
     );
-    await supabase
-      .from("nodes")
-      .update({ status: "healthy", updated_at: new Date().toISOString() })
-      .eq("id", proposal.node_id);
+    if (appliedAction !== "ISOLATE_NODE") {
+      await supabase
+        .from("nodes")
+        .update({ status: "healthy", updated_at: new Date().toISOString() })
+        .eq("id", proposal.node_id);
+    }
   }
 
   if (gateId) {
@@ -323,9 +420,7 @@ async function runCycle(supabase: SupabaseClient): Promise<void> {
     const proposal: Proposal = parsed.data;
     const verdict = verifyConstraints(state, proposal);
 
-    const authzCtx = SUBGRAPH_URL
-      ? await fetchAuthzContext(SUBGRAPH_URL, detection.nodeId, [])
-      : { incidentCount: 0, overrideCounts: {} };
+    const authzCtx = await authzContextFor(detection.nodeId, []);
 
     const requirement = requireAuthorization(
       verdict,
@@ -402,50 +497,42 @@ async function runCycle(supabase: SupabaseClient): Promise<void> {
 async function pollGateSatisfaction(supabase: SupabaseClient): Promise<void> {
   const { data: gates } = await supabase
     .from("human_gates")
-    .select("*")
-    .eq("status", "pending")
+    .select("*, proposals(node_id,proposed_action)")
+    .in("status", OPEN_GATE_STATUSES)
     .limit(10);
 
-  for (const gate of gates ?? []) {
-    const { data: approvals } = await supabase
-      .from("human_approvals")
-      .select("nullifier,operator,chosen_action,ts")
-      .eq("gate_id", gate.id);
+  for (const gate of (gates ?? []) as (GateRow & {
+    proposals: { node_id: string; proposed_action: string } | null;
+  })[]) {
+    const collected = await collectedApprovals(supabase, gate.id);
+    if (collected.length === 0) continue;
 
-    const collected: HumanApproval[] = (approvals ?? []).map((a) => ({
-      nullifier: a.nullifier,
-      operator: a.operator,
-      chosenAction: a.chosen_action ?? "",
-      ts: Number(a.ts),
-    }));
-
-    const requirement = requireAuthorization(
-      {
-        verdict: "VIOLATION_TRIGGERED",
-        detail: gate.reason ?? "",
-        projected: {},
-      },
-      (gate.operators_required as string[]) ?? [],
-      gate.chosen_action ?? "ISOLATE_NODE",
-      authzConfig,
-      { incidentCount: 0, overrideCounts: {} }
+    const requirement = gateRequirement(gate);
+    const context = await authzContextFor(
+      gate.proposals?.node_id ?? "",
+      collected.map((approval) => approval.nullifier)
     );
+    const resolution = resolveCollected(requirement, collected, context);
 
-    requirement.tier = gate.required_tier as AuthTier;
-    requirement.quorum = gate.required_quorum;
-    requirement.operatorsRequired = (gate.operators_required as string[]) ?? [];
-
-    if (!isSatisfied(requirement, collected)) continue;
+    if (!resolution.resolved) continue;
 
     const chosen =
       gate.chosen_action ??
-      collected[0]?.chosenAction ??
+      resolution.accepted[0]?.chosenAction ??
+      gate.proposals?.proposed_action ??
       "NO_OP";
 
     await supabase
       .from("human_gates")
       .update({ status: "resolved", chosen_action: chosen })
       .eq("id", gate.id);
+
+    await logEvent(
+      supabase,
+      "override",
+      `gate ${gate.id} resolved by ${resolution.accepted.length} distinct human${resolution.accepted.length === 1 ? "" : "s"} — releasing ${chosen}`,
+      gate.proposals?.node_id ?? undefined
+    );
   }
 }
 
