@@ -29,6 +29,31 @@ still listed here because they are your dependencies; tick them when the new own
 > Also done and ready to import: `C1` (verifier), `C2` (scenarios), `C3` (authz policy), `C4`
 > (property suites). See the bottom of `STREAM-C.md` for the exact call shapes.
 
+> **B, 23:30 — first live end-to-end reasoning cycle, and two real bugs it surfaced.** Injected a
+> real fault (`node-07` hot, `node-11` offline) to test World ID against a genuine gate, and hit
+> two bugs in code that had never actually been exercised end-to-end before:
+>
+> 1. **`packages/sim`'s `persistState` upsert omitted `name`/`operator_id`** — both `NOT NULL` with
+>    no default. Postgres validates the implicit insert tuple before conflict resolution, so this
+>    silently failed the *entire batch upsert, for every node*, on every single simulator tick,
+>    since B1 first landed. Fixed by including `name`/`operator_id` in the upsert payload.
+> 2. **`gridFingerprint` hashed the whole mesh**, including `device-s22`. That device reports on
+>    its own ~8s cadence (D's real phone). A real 0G Compute call takes 50-90s. So the device's
+>    *own heartbeat alone* guaranteed every reasoning cycle would discard as `STALE`, regardless of
+>    which node was actually being reasoned about — **this would have silently broken the loop the
+>    moment the physical device landed**, not just in my test. Scoped the fingerprint to the
+>    reasoning node + its direct neighbors (`relevantNodeIds` in `db.ts`).
+>
+> With both fixed, a real cycle completed — 0G proposed `THROTTLE_NODE` for `node-07` using real
+> history (cited two prior verified decisions) — and the verifier escalated:
+> `THROTTLE_NODE cannot be verified — the projection contains metrics no invariant applies to:
+> device-s22 has no bounds in genio_blueprint.json`. **That's a blueprint/verifier gap, not B's** —
+> `device-s22` was added to the mesh without physical bounds in `genio_blueprint.json`, so *any*
+> action that projects onto it will always escalate. Flagged in `BOARD.md`'s Blockers table for C/D
+> to pick up. The escalation did open a real T1 gate and the World ID widget rendered a genuine QR
+> end-to-end (B5.1/B5.2 confirmed live) — it just needs an actual phone scan to complete, which I
+> can't fabricate.
+
 Order below is the order to do it in. B2 starts early and runs in parallel with everything.
 
 ---
