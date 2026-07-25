@@ -151,10 +151,21 @@ the endpoint in later. Ask B for a fixture at 15:00 if the spike is still runnin
       - all six `ACTIONS` from `@verimesh/shared`, posting to **`/api/rehearse`**, which writes a
         proposal + verdict (+ a gate when it needs a human) marked `llm_provider: "rehearsal"` and
         `risk_flags: ["rehearsal"]` so rehearsal rows are always distinguishable from real ones.
-      - ⚠️ the route's `rehearsalRequirement` is **deliberately not the real policy** — it is a local
-        stand-in that reads the edge table for cross-operator neighbours so A can rehearse the T1 and
-        T2 modals before C lands `authz.ts`. It is named for that. **When C ships `requireAuthorization`,
-        this function should be deleted and the route should call the real one.**
+      - ✅ **now calls C's real policy.** The local stand-in was deleted the moment `C3` landed
+        (`7c62ecd`) — the route synthesises a `VerdictResult` from the edge table's cross-operator
+        neighbours and hands it to **`requireAuthorization`** from `@verimesh/shared` with the live
+        `authzConfig`. So the tier shown in the UI *is* the tier the policy computes, and a policy
+        change is visible in the console immediately.
+      - the body accepts optional `verdict` and `incidentCount` so any branch can be rehearsed
+        deliberately. **Verified against C's policy:** `NO_OP` → `T0_AUTONOMOUS`; `ISOLATE_NODE` on a
+        node bordering another operator → `T2_QUORUM` quorum 2 `[opA, opB]`; and
+        `{"action":"SCALE_UP","incidentCount":2}` → **`T1_SINGLE` with reason
+        "escalated: 2 prior incidents on this node"**, which exercises the ✦ history-escalated tier
+        stretch feature end-to-end from the UI.
+      - C's reason strings are richer than the plan's example
+        (`ISOLATE_NODE projects across 2 operators (opA, opB) — node-06 throughput 612.00ops/s vs floor
+        800.00ops/s`); the modal parses out the operator names and colours them with the **same hues the
+        3D mesh uses**, so the sentence and the boundary on screen are the same visual language.
 
 ---
 

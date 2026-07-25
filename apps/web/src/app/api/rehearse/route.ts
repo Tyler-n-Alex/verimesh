@@ -1,14 +1,25 @@
 import { NextResponse } from "next/server";
-import { ACTIONS, type Action, type AuthTier } from "@verimesh/shared";
+import {
+  ACTIONS,
+  authzConfig,
+  requireAuthorization,
+  type Action,
+  type AuthzConfig,
+  type NodeMetrics,
+  type Verdict,
+  type VerdictResult,
+} from "@verimesh/shared";
 import { ADMIN_MISSING, getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
 
-const HIGH_PRIVILEGE: Action[] = ["ISOLATE_NODE", "THROTTLE_NODE"];
+const VERDICTS: Verdict[] = ["VERIFIED", "VIOLATION_TRIGGERED", "ESCALATE"];
 
 interface RehearseBody {
   action?: string;
   nodeId?: string;
+  verdict?: string;
+  incidentCount?: number;
 }
 
 interface NodeRecord {
@@ -80,14 +91,45 @@ export async function POST(request: Request) {
     (n) => n.operator_id !== node.operator_id
   );
 
-  const requirement = rehearsalRequirement(
-    action,
+  const reaches = action === "ISOLATE_NODE" || action === "REBALANCE_LOAD";
+  const breach = reaches ? (crossing[0] ?? null) : null;
+
+  const verdictKind: Verdict = VERDICTS.includes(body.verdict as Verdict)
+    ? (body.verdict as Verdict)
+    : breach
+      ? "VIOLATION_TRIGGERED"
+      : "VERIFIED";
+
+  const verdict: VerdictResult = {
+    verdict: verdictKind,
+    detail:
+      verdictKind === "VERIFIED"
+        ? `REHEARSAL — ${action} projected in-envelope for ${node.operator_id}.`
+        : `REHEARSAL — ${action} on ${node.name} projects outside the envelope.`,
+    violated:
+      verdictKind === "VERIFIED" || !breach
+        ? undefined
+        : { node: breach.id, metric: "throughput", value: 612, bound: 800 },
+    projected: {} as Record<string, NodeMetrics>,
+  };
+
+  const affectedOperators = [
     node.operator_id,
-    crossing.map((n) => n.operator_id)
+    ...(breach ? crossing.map((n) => n.operator_id) : []),
+  ];
+
+  const requirement = requireAuthorization(
+    verdict,
+    affectedOperators,
+    action,
+    authzConfig as AuthzConfig,
+    {
+      incidentCount: Number(body.incidentCount ?? 0),
+      overrideCounts: {},
+    }
   );
 
   const ts = Date.now();
-  const breach = crossing[0] ?? null;
 
   const { data: proposalRows, error: proposalError } = await supabase
     .from("proposals")
@@ -125,32 +167,16 @@ export async function POST(request: Request) {
 
   let gateId: number | null = null;
 
-  if (requirement.tier === "T0_AUTONOMOUS") {
-    await supabase.from("verdicts").insert({
-      proposal_id: proposalId,
-      verdict: "VERIFIED",
-      detail: `REHEARSAL — ${action} projected in-envelope for ${node.operator_id}.`,
-      violated: null,
-      projected: {},
-      ts: ts + 120,
-    });
-  } else {
-    await supabase.from("verdicts").insert({
-      proposal_id: proposalId,
-      verdict: "VIOLATION_TRIGGERED",
-      detail: `REHEARSAL — ${requirement.reason}`,
-      violated: breach
-        ? {
-            node: breach.id,
-            metric: "throughput",
-            value: 612,
-            bound: 800,
-          }
-        : null,
-      projected: {},
-      ts: ts + 120,
-    });
+  await supabase.from("verdicts").insert({
+    proposal_id: proposalId,
+    verdict: verdict.verdict,
+    detail: verdict.detail,
+    violated: verdict.violated ?? null,
+    projected: {},
+    ts: ts + 120,
+  });
 
+  if (requirement.tier !== "T0_AUTONOMOUS") {
     const { data: gateRows, error: gateError } = await supabase
       .from("human_gates")
       .insert({
@@ -182,45 +208,4 @@ export async function POST(request: Request) {
     gateId,
     requirement,
   });
-}
-
-function rehearsalRequirement(
-  action: Action,
-  operator: string,
-  crossingOperators: string[]
-): {
-  tier: AuthTier;
-  quorum: number;
-  operatorsRequired: string[];
-  reason: string;
-} {
-  const distinctCrossing = Array.from(new Set(crossingOperators)).filter(
-    (op) => op !== operator
-  );
-
-  if (action === "ISOLATE_NODE" && distinctCrossing.length > 0) {
-    const other = distinctCrossing[0];
-    return {
-      tier: "T2_QUORUM",
-      quorum: 2,
-      operatorsRequired: [operator, other],
-      reason: `isolating ${operator}'s node would breach ${other}'s neighbouring node`,
-    };
-  }
-
-  if (HIGH_PRIVILEGE.includes(action)) {
-    return {
-      tier: "T1_SINGLE",
-      quorum: 1,
-      operatorsRequired: [operator],
-      reason: `${action} is a high-privilege action confined to ${operator}`,
-    };
-  }
-
-  return {
-    tier: "T0_AUTONOMOUS",
-    quorum: 0,
-    operatorsRequired: [],
-    reason: `${action} is in-envelope and needs no human`,
-  };
 }
