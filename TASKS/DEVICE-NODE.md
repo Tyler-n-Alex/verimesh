@@ -159,17 +159,49 @@ fresh database or after someone re-runs the seed. It is idempotent — running i
 
 ### On the phone
 
-1. **Install Termux and Termux:API from F-Droid.** *Not* the Play Store — that build is abandoned and
-   `termux-battery-status` will not work. Both must come from F-Droid or the API bridge is refused.
-2. **Install Tailscale** from the Play Store and sign in with the **same account** as the laptop.
-   Confirm the laptop appears in its device list.
+1. **Install Termux.** Exact names and package IDs on F-Droid — note the **colon** in the add-ons:
+
+   | F-Droid listing | Package ID | Needed? |
+   |---|---|---|
+   | **Termux** | `com.termux` | yes |
+   | **Termux:API** | `com.termux.api` | only for battery temp / % / charging — **optional, see below** |
+   | **Termux:Widget** | `com.termux.widget` | only for the tap-to-heat button (D8) |
+
+   *Not* the Play Store — that build is abandoned.
+
+   **If `Termux` does not appear in the F-Droid client's search:** the newest main-app build on F-Droid
+   is a **pre-release** (`0.119.0-beta.3`), and F-Droid hides pre-release-only apps by default. Fix:
+   *Settings → enable **Expert mode** → enable **Unstable updates***, then *Settings → Repositories* and
+   pull down to refresh the index. Search again.
+
+   **Guaranteed fallback:** download the APK directly from
+   <https://f-droid.org/packages/com.termux/> (and `com.termux.api` if you want it). You lose update
+   notifications, which does not matter this weekend.
+
+   🔑 **All Termux apps must come from the same source.** F-Droid builds and GitHub builds are signed
+   with different keys. Mix them and Android either refuses the install or `termux-battery-status`
+   fails with a permission error that looks like a bug. Pick one source and use it for all of them.
+
+2. **Install Tailscale** from the Play Store and sign in with the **same account** as the host.
+   Confirm the host appears in its device list.
 3. In Termux:
    ```sh
-   pkg update && pkg install nodejs termux-api stress-ng
-   termux-battery-status
+   pkg update && pkg install nodejs stress-ng
+   pkg install termux-api        # only if you installed the Termux:API app
+   termux-battery-status         # only if you installed the Termux:API app
    ```
-   That last command **must** print JSON including `"temperature"`. If it hangs or errors, Termux:API
-   is missing or its permission was denied — fix it before continuing.
+   If you did install it, `termux-battery-status` must print JSON containing `"temperature"`.
+
+   ### Termux:API is optional — you probably do not need it
+   Only battery temperature, battery percentage and charging state come from Termux:API. Everything
+   else the reporter sends is read straight from the filesystem and needs no add-on at all:
+   CPU load (`/proc/stat`), SoC temperature (`/sys/class/thermal`), memory (`/proc/meminfo`) and the
+   measured work rate.
+
+   Since we are running **off-charger** and therefore using `VERIMESH_TEMP_SOURCE=soc` anyway, the
+   reporter degrades cleanly without it: `batteryStatus()` returns null, battery/charging report as
+   `—`, and temperature falls through to the SoC sensor. **If Termux:API turns into a rabbit hole,
+   skip it and move on.**
 4. **Stop Android killing it:** Settings → Apps → Termux → Battery → **Unrestricted**, then in the
    Termux session run `termux-wake-lock`.
 5. **Pull the scripts straight off the host** — no cable, no git, no auth. Substitute the host's
