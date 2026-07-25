@@ -6,14 +6,16 @@
   "main": "src/index.ts",
   "scripts": {
     "seed": "tsx --env-file=../../.env.local src/seed.ts",
-    "dev": "tsx watch --env-file=../../.env.local src/index.ts"
+    "dev": "tsx watch --env-file=../../.env.local src/index.ts",
+    "start": "tsx --env-file=../../.env.local src/index.ts",
+    "scenario": "tsx --env-file=../../.env.local src/scenario.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
+    "@verimesh/chain": "workspace:*",
     "@verimesh/shared": "workspace:*",
     "@verimesh/sim": "workspace:*",
-    "@verimesh/verifier": "workspace:*",
-    "@verimesh/chain": "workspace:*"
+    "@verimesh/verifier": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.16.2"

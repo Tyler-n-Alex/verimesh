@@ -4,7 +4,15 @@
   "private": true,
   "type": "module",
   "main": "src/index.ts",
+  "scripts": {
+    "start": "tsx --env-file=../../.env.local src/index.ts",
+    "dev": "tsx watch --env-file=../../.env.local src/index.ts"
+  },
   "dependencies": {
+    "@verimesh/chain": "workspace:*",
     "@verimesh/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.16.2"
   }
 }
