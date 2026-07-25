@@ -186,10 +186,12 @@ fresh database or after someone re-runs the seed. It is idempotent — running i
    Confirm the host appears in its device list.
 3. In Termux:
    ```sh
-   pkg update && pkg install nodejs stress-ng
+   pkg update && pkg install nodejs
    pkg install termux-api        # only if you installed the Termux:API app
    termux-battery-status         # only if you installed the Termux:API app
    ```
+   **`nodejs` is the only required package.** Do not bother with `stress-ng` — it is not in Termux's
+   default repo; `heat.js` replaces it (see *Making it fail on cue*).
    If you did install it, `termux-battery-status` must print JSON containing `"temperature"`.
 
    ### Termux:API is optional — you probably do not need it
@@ -209,7 +211,7 @@ fresh database or after someone re-runs the seed. It is idempotent — running i
    ```sh
    HOST=http://100.x.y.z:3000
    curl -o report.js "$HOST/api/device/bootstrap?file=report.js"
-   curl -o stress.sh "$HOST/api/device/bootstrap?file=stress.sh"
+   curl -o heat.js   "$HOST/api/device/bootstrap?file=heat.js"
    ```
    **If `curl` fails here, the network is the problem, not the phone** — go back to the table above.
    This is the cheapest possible connectivity test, so do it before anything else.
@@ -231,12 +233,23 @@ fresh database or after someone re-runs the seed. It is idempotent — running i
 
 ## Making it fail on cue (D8)
 
+⚠️ **`stress-ng` is not in Termux's default repo** — `pkg install stress-ng` returns *unable to locate
+package*. Do not chase it. **Use `heat.js` instead**, which needs nothing but the Node you already
+installed for the reporter:
+
 ```sh
-bash stress.sh 45 8      # 45 seconds, 8 workers
+curl -o heat.js "$HOST/api/device/bootstrap?file=heat.js"
+node heat.js 45 8        # 45 seconds, 8 workers (defaults to all cores)
 ```
 
-Bounded and self-killing, with a pure-shell fallback if `stress-ng` is missing. Short bursts only —
-phones throttle themselves safely, and we do not need a hot phone for long.
+It spawns one `worker_threads` worker per core running tight float math, so it saturates at native
+JIT speed rather than at shell-loop speed. **Measured: 19.5 CPU-seconds consumed in 5 wall seconds
+with 4 workers** — i.e. genuinely pegging every worker. Bounded, self-terminating, prints a countdown,
+and handles Ctrl-C.
+
+`stress.sh` is still there and now tries `stress-ng` → `heat.js` → shell workers in that order, so
+either entry point works. Short bursts only — phones throttle themselves safely, and we do not need a
+hot phone for long.
 
 ### 🔌 No cable also means no charging — so use the SoC sensor
 
@@ -263,10 +276,11 @@ zones on first tick and prints `soc -` if none are accessible. **Check that line
 ### Bounds — measure, then set
 
 **Do this once the reporter is running, before rehearsing.** Watch the idle line for ~30 s, then run a
-burst and watch the peak:
+burst and watch the peak. Run it in a **second Termux session** (swipe from the left edge → *New
+session*) so the reporter keeps printing while the phone heats:
 
 ```sh
-bash stress.sh 45 8
+node heat.js 45 8
 ```
 
 Then set the bounds from what you actually saw, in the repo-root `.env.local`:
@@ -291,7 +305,7 @@ Install **Termux:Widget** from F-Droid, then:
 
 ```sh
 mkdir -p ~/.shortcuts
-printf '#!/data/data/com.termux/files/usr/bin/bash\nbash ~/stress.sh 45 8\n' > ~/.shortcuts/heat-the-phone
+printf '#!/data/data/com.termux/files/usr/bin/bash\ncd ~ && node heat.js 45 8\n' > ~/.shortcuts/heat-the-phone
 chmod +x ~/.shortcuts/heat-the-phone
 ```
 

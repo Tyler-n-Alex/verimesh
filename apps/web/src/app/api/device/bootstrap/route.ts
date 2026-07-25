@@ -4,7 +4,12 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-const ALLOWED = new Set(["report.js", "stress.sh", "fake-phone.js"]);
+const ALLOWED = new Set([
+  "report.js",
+  "heat.js",
+  "stress.sh",
+  "fake-phone.js",
+]);
 
 export async function GET(request: Request) {
   const requested =

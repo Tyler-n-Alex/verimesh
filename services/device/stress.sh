@@ -12,7 +12,13 @@ if command -v stress-ng >/dev/null 2>&1; then
   exit 0
 fi
 
-echo "verimesh: stress-ng not installed, falling back to shell workers"
+if command -v node >/dev/null 2>&1 && [ -f "$(dirname "$0")/heat.js" ]; then
+  echo "verimesh: stress-ng unavailable, using node heat.js"
+  node "$(dirname "$0")/heat.js" "${SECONDS_TO_RUN}" "${WORKERS}"
+  exit 0
+fi
+
+echo "verimesh: no stress-ng and no node, falling back to shell workers"
 pids=()
 for _ in $(seq 1 "${WORKERS}"); do
   ( while :; do :; done ) &
