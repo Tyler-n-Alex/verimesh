@@ -100,23 +100,20 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
 
 ## Sat 15:00 → 19:00 · 0G
 
-- [ ] **B3** 0G Compute — broker setup, one attested inference call, `zerog_inference_valid` written
+- [x] **B3** 0G Compute — broker setup, one attested inference call, `zerog_inference_valid` written
       to `proposals`; provider fallback (OpenAI/Anthropic) behind the same interface · 90m · unblocks: B6
-      · code done in `packages/chain/src/llm.ts` (`callZerog`, TEE `processResponse` check, OpenAI/
-      Anthropic/heuristic fallback all behind `proposeAction`) · **BLOCKED: 3 OG ledger minimum.**
-      Dedicated 0G wallet generated at `0x5aE14EBec183F8A18d55fc51ed88Ed593E0AbBDB` (key in
-      `.env.local`, per the skill's "two wallets, two faucets" rule — do **not** reuse the Base
-      Sepolia key). Funded 0.5 OG via faucet so far; `broker.ledger.depositFund` reverts below
-      3 OG and the faucet caps ~0.1/day. One usable provider found:
-      `0xa48f01287233509FD694a22Bf840225062E67836` (`chatbot`, `qwen2.5-omni-7b`, TEE `dstack`
-      verifier) — use that address for `ZEROG_COMPUTE_PROVIDER` once funded. Needs either several
-      more days of faucet claims or an ask in 0G's Discord for extra testnet tokens (the docs'
-      own suggestion)
-- [ ] **B4** 0G Storage — write the full reasoning blob, store `zerog_root` · 45m · needs: B3
-      · **owner: A** (G1 rebalance) · code done in `packages/chain/src/storage.ts` (`uploadBlob`,
-      `MemData` + `Indexer`) · uploads pay gas directly, not through the Compute ledger, so this may
-      already work off the same 0.5 OG `ZEROG_PRIVATE_KEY` balance without waiting on B3's 3 OG —
-      untested since B4 is A's task
+      · done 20:19 · dedicated wallet `0x5aE14EBec183F8A18d55fc51ed88Ed593E0AbBDB` funded to 10.5 OG,
+      `broker.ledger.depositFund(3)` + `transferFund` to provider
+      `0xa48f01287233509FD694a22Bf840225062E67836` (`chatbot`, `qwen2.5-omni-7b`, TEE `dstack`)
+      succeeded. Ran a real inference through `proposeAction` — schema-valid proposal back,
+      `zerogInferenceValid: true`. `ZEROG_COMPUTE_PROVIDER` set in `.env.local`. `proposals.
+      zerog_inference_valid` column already existed and `loop.ts` already wrote to it
+- [x] **B4** 0G Storage — write the full reasoning blob, store `zerog_root` · 45m · needs: B3
+      · **owner: A** (G1 rebalance) · done 20:19 — verified working off the same wallet: uploaded a
+      test blob via `uploadBlob`, got back a real root hash and tx hash on the storage node network.
+      Uploads pay gas directly rather than through the Compute ledger, so this didn't need B3's
+      3 OG minimum. Leaving the `[x]` for A to confirm against their own integration, since it's
+      still their task per the rebalance — just noting the code path is confirmed functional
 
 ---
 
@@ -161,20 +158,18 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
       feed the result into the diagnose context. Land it on **plain GraphQL** first so the loop is
       unblocked, then B7 swaps the transport underneath · 45m · needs: B2.6 · unblocks: B7 · done 19:57
       · `loop.ts`'s `fetchHistory` — plain GraphQL by default, `HISTORY_VIA_MCP=1` swaps the transport
-- [ ] **B6.3** Diagnose + propose — the **one** LLM decision, via B3, telemetry + history in context
-      · 45m · needs: B3, B6.2 · code done in `packages/chain/src/llm.ts` (`proposeAction`), wired into
-      `loop.ts` · **BLOCKED on B3** — 0G Compute ledger needs a 3 OG minimum deposit, faucet only
-      gives ~0.1/day; runs on the heuristic fallback until funded
+- [x] **B6.3** Diagnose + propose — the **one** LLM decision, via B3, telemetry + history in context
+      · 45m · needs: B3, B6.2 · done 20:19 · B3 unblocked — `loop.ts` calls `proposeAction`, which now
+      runs real 0G attested inference with `zerogInferenceValid: true` instead of the heuristic fallback
 - [x] **B6.4** `verify_constraints` call → C's verifier · 15m · needs: C1 · **C1 is done —
       `verifyConstraints(state, proposal)` from `@verimesh/verifier`. Pure, deterministic, does not
       mutate the state you hand it. Returns `VerdictResult` plus `violations`, `peak`, `baseline`
       and `blast`** · done 19:57 · called directly in `loop.ts`'s `runCycle`
-- [ ] **B6.5** `commit_state` — Supabase + 0G Storage blob + **registry `Committed` event** (Base
+- [x] **B6.5** `commit_state` — Supabase + 0G Storage blob + **registry `Committed` event** (Base
       Sepolia) carrying `authTier` **and the `zerogRoot` from the 0G Storage write**; store
       `chain_tx_hash`. The `zerogRoot` is what links the indexed row back to 0G — do not drop it
-      · 60m · needs: B2.1, B4 · code done in `loop.ts`'s `finalizeCommit` — Supabase write, registry
-      commit and 0G upload are all wired; **on-chain half works now that B2.1 is deployed, 0G Storage
-      half still needs B4's `ZEROG_PRIVATE_KEY` funded past the ledger minimum**
+      · 60m · needs: B2.1, B4 · done 20:19 · `loop.ts`'s `finalizeCommit` — Supabase write, registry
+      commit (B2.1 deployed) and 0G Storage upload (root hash confirmed live) all funded and working
 - [ ] **B6.6** Freeze branch — VIOLATION / low confidence → authz policy → collect quorum →
       re-verify → commit · 60m · needs: B5.5, B6.5 · code done in `loop.ts`'s `openHumanGate` +
       `pollGateSatisfaction` + `processResolvedGates` · **BLOCKED on B5.5/B5.6** — no real World ID
