@@ -186,3 +186,62 @@ with `NOT_ON_ALLOWLIST` and no T1 or T2 gate can ever resolve. That is fail-clos
 personhood is not authority. But if `B5.6` slips, the freeze modal will reject a real World ID scan
 on stage and it will look like the World integration is broken. Enrol both identities early and run
 `benign_spike` (T0, needs no human) to sanity-check the rest of the path independently.
+
+---
+
+## Audit of the verifier — 16:30
+
+Went at my own code with hostile input rather than the happy path. **Three fail-open defects, now
+fixed and regression-tested** (73 tests). Fail-*open* is the wrong direction for a component whose
+entire job is to refuse, so these mattered.
+
+- **The verifier returned `VERIFIED` for a node it had never heard of.** `checkMetrics` returned
+  `[]` for any id absent from `genio_blueprint.json`, and every comparison against `NaN` is false.
+  A node at 999 °C with load 5 passed. So did a node whose `temp` arrived `null` from Supabase.
+  Now: unverifiable nodes → `ESCALATE`, with every non-finite metric named.
+  **B: if you ever see `cannot be verified — the projection contains metrics no invariant applies
+  to`, that is a node id or a null column, not a physics problem.**
+- **`"isolated"` was treated as a live node.** `NodeStatus` has both `isolated` and `offline`; only
+  `offline` was excluded. An isolated node still absorbed shed load and still evolved in the
+  simulator. With `node-11` marked `isolated` instead of `offline`, the cascade projected `node-12`
+  at 0.953 instead of 1.037 — a materially *less* conservative number, off a status B could
+  reasonably set. Both are now non-participating everywhere.
+- **`isSatisfied` could be satisfied by humans on nobody's allowlist.** It never sees `config`, so
+  it can only answer quorum + operator coverage. **Use `resolveGate(requirement, collected, config,
+  context)`** — it re-vets the whole set through `checkApproval` first and returns
+  `{ resolved, accepted, rejected }`. `isSatisfied` alone is not an authorization decision.
+
+Smaller, same direction: `overrideCount` took the first matching key rather than the worst and
+returned `0` for an unparseable nullifier; `quorumTruthCheck` threw on a malformed on-chain
+nullifier instead of reporting red.
+
+### Findings I did **not** change — they are spec, not code
+
+- **The blueprint's own numbers are marginally inconsistent.** `L_max = 0.92` implies an
+  equilibrium temperature of **85.07 °C** against `T_max = 85`. A node running at exactly its rated
+  load exceeds its rated temperature, so **the temperature ceiling trips before the load ceiling
+  ever does** (load binds only above ~0.916). Harmless for the demo — the cascade breaches both —
+  but "load ceiling" does not mean what it looks like. Fixing it means editing `genio_blueprint.json`,
+  which is frozen H0.1 data; raise `T_max` to 86 or drop `L_max` to 0.90 if anyone wants it exact.
+- **Two of the four invariants do not bind in practice.** `power` needs ~4.5× the baseline draw and
+  only `SCALE_UP` touches power at all (×1.1), so it is unreachable. `throughput` is a *dependent*
+  symptom of temperature under `physics.ts` — it can only fire when the thermal ceiling has already
+  fired, or when throughput is set inconsistently with the model. So the honest description is
+  **two binding invariants (temp, load) plus a consistency backstop and a dead one**, not four
+  independent constraints. The backstop still earns its place: it catches injected or sensor-faulted
+  throughput that the thermal model does not explain.
+- **`physics.ts` has no inter-node coupling at all** — each node's update depends only on its own
+  metrics. The cascade is entirely the `t=0` load redistribution in `project.ts`. Do not say at the
+  booth that the simulator propagates thermal cascades; say the verifier projects the redistribution
+  an action would cause. It is a better claim anyway, and it is true.
+- **T1 is nearly unreachable without the history escalation.** `ISOLATE_NODE` touches five nodes
+  across two operators from any state in this blueprint, so it is always T2. That leaves
+  `recurring_fault` as the only live T1 path — which is fine, it *is* the memory beat, but if
+  anyone wants a T1 demo without history they will not find one by hand.
+- **`nullifier.ts` (frozen, H0.1b): `"1234"` normalises as decimal → `0x4d2`, but `"01234"`
+  normalises as hex → `0x1234`.** Same digits, different human, decided by a leading zero. World ID
+  v4 returns `0x`-prefixed hex so this cannot bite us in practice, and the file is frozen — but a
+  bare all-digit hex nullifier from any other source would silently become a different identity.
+- **An isolated node's projected metrics freeze at the moment of isolation** (`node-07` shows 78 °C
+  at 0 W forever). Physically it would cool. A already dims isolated nodes, so this is cosmetic —
+  but do not put a temperature readout on an isolated node in the inspector.
