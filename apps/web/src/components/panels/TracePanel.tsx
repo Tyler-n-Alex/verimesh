@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { Children, useMemo } from "react";
 import { EmptyState } from "@/components/ui/Panel";
 import { Pill } from "@/components/ui/Pill";
 import { CitedHistoryPanel } from "@/components/panels/CitedHistoryPanel";
@@ -201,7 +201,9 @@ function Step({
 }) {
   const tone = STATE_TONE[step.state];
   const dim = step.state === "idle";
-  const hasBody = Boolean(children) || Boolean(step.headline);
+  const detail = Children.toArray(children);
+  const hasDetail = detail.length > 0;
+  const hasBody = hasDetail || Boolean(step.headline);
 
   return (
     <li className="animate-rise flex gap-3">
@@ -243,14 +245,14 @@ function Step({
 
         {hasBody ? (
           <div className="flex flex-col gap-2">
-            {step.headline && !children ? (
+            {step.headline && !hasDetail ? (
               <p
                 className={`text-[11.5px] leading-relaxed ${dim ? "text-ink-faint" : "text-ink-dim"}`}
               >
                 {step.headline}
               </p>
             ) : null}
-            {children}
+            {detail}
           </div>
         ) : null}
       </div>

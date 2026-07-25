@@ -52,6 +52,15 @@ const STEP_LABELS: Record<StepKey, string> = {
   resolve: "commit / freeze",
 };
 
+const IDLE_HINTS: Record<StepKey, string> = {
+  telemetry: "waiting for the next telemetry window",
+  detect: "deterministic rules — no LLM on this step",
+  history: "will query the subgraph for this node's prior incidents",
+  propose: "the one LLM call, via 0G Compute, with telemetry + history in context",
+  verify: "deterministic projection — VERIFIED / VIOLATION / ESCALATE",
+  resolve: "commits autonomously, or freezes for human authorization",
+};
+
 function matchEvent(events: EventRow[], tokens: string[]): EventRow | null {
   for (const event of events) {
     const type = event.type.toLowerCase();
@@ -116,7 +125,7 @@ export function deriveCycle(state: MeshState): TraceCycle {
     key: "telemetry",
     label: STEP_LABELS.telemetry,
     state: telemetryEvent ? "done" : state.hydrated ? "active" : "idle",
-    headline: telemetryEvent?.message ?? "awaiting the next telemetry window",
+    headline: telemetryEvent?.message ?? null,
     ts: telemetryEvent?.ts ?? null,
   });
 
@@ -187,6 +196,10 @@ export function deriveCycle(state: MeshState): TraceCycle {
         : null,
     ts: commit?.ts ?? gate?.ts ?? null,
   });
+
+  for (const step of steps) {
+    if (!step.headline) step.headline = IDLE_HINTS[step.key];
+  }
 
   return { proposal, verdict, commit, gate, steps, cited, nodeId };
 }
