@@ -4,6 +4,7 @@ export interface DeviceMetrics {
   socTemp?: number | null;
   battery?: number | null;
   charging?: boolean | null;
+  tempSource?: string | null;
 }
 
 export interface NodeRow {
@@ -179,6 +180,7 @@ export function mapNode(row: NodeRow): MeshNode {
       socTemp: row.metrics?.socTemp ?? null,
       battery: row.metrics?.battery ?? null,
       charging: row.metrics?.charging ?? null,
+      tempSource: row.metrics?.tempSource ?? null,
     },
   };
 }

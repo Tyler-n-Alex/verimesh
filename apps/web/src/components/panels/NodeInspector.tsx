@@ -248,11 +248,21 @@ function DevicePanel({
           </>
         ) : (
           <>
-            Load is real CPU utilisation from <span className="data">/proc/stat</span>{" "}
-            and temperature is the real battery sensor via{" "}
-            <span className="data">termux-battery-status</span>. Throughput is a
-            measured work rate, so thermal throttling shows up as a genuine
-            drop. This handset has no fan, so fan speed reads —.
+            Load is real CPU utilisation from <span className="data">/proc/stat</span>.
+            Temperature is{" "}
+            {node.device.tempSource === "soc" ? (
+              <>
+                the real SoC sensor from{" "}
+                <span className="data">/sys/class/thermal</span>
+              </>
+            ) : (
+              <>
+                the real battery sensor via{" "}
+                <span className="data">termux-battery-status</span>
+              </>
+            )}
+            . Throughput is a measured work rate, so thermal throttling shows up
+            as a genuine drop. This handset has no fan, so fan speed reads —.
           </>
         )}
       </p>

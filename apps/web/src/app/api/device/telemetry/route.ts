@@ -21,6 +21,7 @@ interface TelemetryBody {
   battery?: number | null;
   charging?: boolean | null;
   label?: string | null;
+  tempSource?: string | null;
 }
 
 interface NodeRow {
@@ -116,6 +117,7 @@ export async function POST(request: Request) {
       socTemp,
       battery,
       charging: body.charging ?? null,
+      tempSource: body.tempSource === "soc" ? "soc" : "battery",
     },
     last_seen_at: nowIso,
     updated_at: nowIso,

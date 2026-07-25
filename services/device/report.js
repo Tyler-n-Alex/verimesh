@@ -7,6 +7,12 @@ const NODE_ID = process.env.VERIMESH_NODE_ID || "device-s22";
 const LABEL = process.env.VERIMESH_DEVICE_LABEL || "Galaxy S22";
 const INTERVAL_MS = Number(process.env.VERIMESH_INTERVAL_MS || 2000);
 const X_NOMINAL = Number(process.env.VERIMESH_X_NOMINAL || 1000);
+const TEMP_SOURCE = (process.env.VERIMESH_TEMP_SOURCE || "battery").toLowerCase();
+
+if (!["battery", "soc", "max"].includes(TEMP_SOURCE)) {
+  console.error("VERIMESH_TEMP_SOURCE must be battery | soc | max");
+  process.exit(1);
+}
 
 if (!INGEST_URL || !TOKEN) {
   console.error(
@@ -154,12 +160,33 @@ async function tick() {
   if (load === null) return;
 
   const battery = batteryStatus();
+  const batteryTemp =
+    battery && Number.isFinite(battery.temperature) ? battery.temperature : null;
+  const soc = socTemp();
+
+  let temp = batteryTemp;
+  let usedSource = "battery";
+  if (TEMP_SOURCE === "soc") {
+    temp = soc;
+    usedSource = "soc";
+  } else if (TEMP_SOURCE === "max") {
+    if (soc !== null && (batteryTemp === null || soc > batteryTemp)) {
+      temp = soc;
+      usedSource = "soc";
+    }
+  }
+  if (temp === null && soc !== null) {
+    temp = soc;
+    usedSource = "soc";
+  }
+
   const payload = {
     nodeId: NODE_ID,
     label: LABEL,
     load,
-    temp: battery && Number.isFinite(battery.temperature) ? battery.temperature : null,
-    socTemp: socTemp(),
+    temp,
+    tempSource: usedSource,
+    socTemp: soc,
     throughput: throughput(),
     power: power(battery),
     mem: memoryUsed(),
@@ -188,8 +215,9 @@ async function tick() {
     const bits = [
       `#${sent}`,
       `load ${(load * 100).toFixed(0)}%`,
-      payload.temp !== null ? `batt ${payload.temp.toFixed(1)}C` : "batt -",
-      payload.socTemp !== null ? `soc ${payload.socTemp.toFixed(1)}C` : "soc -",
+      batteryTemp !== null ? `batt ${batteryTemp.toFixed(1)}C` : "batt -",
+      soc !== null ? `soc ${soc.toFixed(1)}C` : "soc -",
+      `using ${usedSource}${payload.temp !== null ? ` ${payload.temp.toFixed(1)}C` : ""}`,
       payload.throughput !== null ? `work ${payload.throughput}` : "work -",
       `-> ${parsed.status}`,
     ];
@@ -201,7 +229,9 @@ async function tick() {
 }
 
 console.log(`verimesh device reporter -> ${INGEST_URL}`);
-console.log(`node ${NODE_ID} (${LABEL}) every ${INTERVAL_MS}ms`);
+console.log(
+  `node ${NODE_ID} (${LABEL}) every ${INTERVAL_MS}ms, temp source ${TEMP_SOURCE}`
+);
 
 void tick();
 setInterval(() => void tick(), INTERVAL_MS);

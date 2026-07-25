@@ -85,41 +85,115 @@ unaffected and we now have **two** independent T2 paths.
 
 ---
 
-## Phone setup (D7) — ~20 minutes, once
+## Phone setup (D7) — ~20 minutes, once · **no-cable route**
+
+### Reaching the host without a cable
+
+**The phone must reach whichever machine runs `pnpm --filter @verimesh/web dev`.** Call that machine
+the **host**. Everything below is relative to the host, not to any particular laptop — the code is in
+git and the schema and the device registration live in Supabase, so the device node works from any
+machine that pulls the repo and has the `DEVICE_*` env vars.
+
+| Route | Host address | Verdict |
+|---|---|---|
+| **Tailscale** | the host's `100.x.y.z` | ✅ **Use this.** Works over **cellular or any WiFi**, so the phone and the host do not need to be on the same network at all — which matters if the host is on an external network. Immune to venue WiFi and to client-isolation, encrypted, and the address does not change when either device changes network. |
+| Same-WiFi LAN | the host's `192.168.x.y` | Only if the phone and host are on the *same* router. Fine at a desk. Venue WiFi often blocks phone→laptop traffic, so treat it as a backup. |
+| Cellular direct | — | Would need `apps/web` deployed publicly. Not required; Tailscale already solves this. |
+
+**Find the host's Tailscale address**, on the host:
+
+```powershell
+& "C:\Program Files\Tailscale\tailscale.exe" ip -4
+```
+
+If the CLI is not on `PATH`, the Tailscale tray icon shows the address, as does the phone's own
+Tailscale device list once both are signed in to the same account.
+
+⚠️ **A consumer VPN on the host will break this.** NordVPN, ExpressVPN and similar frequently ship a
+kill-switch or "block LAN traffic" setting, and they fight Tailscale for routing. If the phone cannot
+reach the host, **disconnect that VPN first** — it is the most likely cause.
+
+⚠️ **Windows Firewall blocks inbound 3000 by default.** Run once, in an **admin** PowerShell on the
+host:
+
+```powershell
+New-NetFirewallRule -DisplayName "Verimesh dev 3000" -Direction Inbound `
+  -Action Allow -Protocol TCP -LocalPort 3000
+```
+
+To undo after the event: `Remove-NetFirewallRule -DisplayName "Verimesh dev 3000"`.
+
+### Host checklist before touching the phone
+
+```powershell
+git pull
+pnpm install
+```
+
+The host's repo-root `.env.local` needs the device block (it is gitignored, so it does **not** travel
+with the pull — copy these across, keeping `DEVICE_TOKEN` identical to whatever the phone will send):
+
+```
+DEVICE_TOKEN=<pick any string; the phone must send exactly this>
+DEVICE_OPERATOR=opC
+DEVICE_LABEL=Galaxy S22
+DEVICE_T_WARN=37
+DEVICE_T_MAX=41
+DEVICE_L_MAX=0.85
+DEVICE_X_NOMINAL=1000
+DEVICE_OWNS_STATUS=true
+NEXT_PUBLIC_DEVICE_NODE_ID=device-s22
+NEXT_PUBLIC_DEVICE_STALE_MS=8000
+```
+
+Then start the app and register the node once:
+
+```powershell
+pnpm --filter @verimesh/web dev
+# in a second terminal
+curl -X POST http://localhost:3000/api/device/register -H "Authorization: Bearer <DEVICE_TOKEN>"
+```
+
+`device-s22` is **already registered in Supabase** with both of its edges, so this is only needed on a
+fresh database or after someone re-runs the seed. It is idempotent — running it is always safe.
+
+### On the phone
 
 1. **Install Termux and Termux:API from F-Droid.** *Not* the Play Store — that build is abandoned and
-   `termux-battery-status` will not work. Both apps must come from the same source or the API bridge
-   is refused.
-2. In Termux:
+   `termux-battery-status` will not work. Both must come from F-Droid or the API bridge is refused.
+2. **Install Tailscale** from the Play Store and sign in with the **same account** as the laptop.
+   Confirm the laptop appears in its device list.
+3. In Termux:
    ```sh
-   pkg update && pkg install nodejs termux-api stress-ng git
+   pkg update && pkg install nodejs termux-api stress-ng
    termux-battery-status
    ```
-   That last command must print JSON including `"temperature"`. If it hangs or errors, Termux:API is
-   missing or its permission was denied — fix that before going further, because battery temperature
-   is the whole point.
-3. **Stop Android killing it:** disable battery optimisation for Termux (Settings → Apps → Termux →
-   Battery → Unrestricted), and in the session run `termux-wake-lock`.
-4. **Get the two files onto the phone** — either `git clone` the repo, or paste them:
-   `services/device/report.js` and `services/device/stress.sh`.
-5. **Point it at the laptop and run it:**
+   That last command **must** print JSON including `"temperature"`. If it hangs or errors, Termux:API
+   is missing or its permission was denied — fix it before continuing.
+4. **Stop Android killing it:** Settings → Apps → Termux → Battery → **Unrestricted**, then in the
+   Termux session run `termux-wake-lock`.
+5. **Pull the scripts straight off the host** — no cable, no git, no auth. Substitute the host's
+   Tailscale address:
    ```sh
-   export VERIMESH_INGEST_URL="http://<laptop-ip>:3000/api/device/telemetry"
-   export VERIMESH_DEVICE_TOKEN="<the DEVICE_TOKEN from the repo-root .env.local>"
+   HOST=http://100.x.y.z:3000
+   curl -o report.js "$HOST/api/device/bootstrap?file=report.js"
+   curl -o stress.sh "$HOST/api/device/bootstrap?file=stress.sh"
+   ```
+   **If `curl` fails here, the network is the problem, not the phone** — go back to the table above.
+   This is the cheapest possible connectivity test, so do it before anything else.
+6. **Run the reporter:**
+   ```sh
+   export VERIMESH_INGEST_URL="$HOST/api/device/telemetry"
+   export VERIMESH_DEVICE_TOKEN="<DEVICE_TOKEN from the host's .env.local>"
    node report.js
    ```
-   It prints one line per tick: `#12 load 34% batt 31.2C soc 39.4C work 980 -> healthy`.
+   One line per tick:
+   ```
+   #12  load 34%  batt 31.2C  soc 44.1C  using battery 31.2C  work 980  -> healthy
+   ```
+   The node turns **Live · Galaxy S22** in the console within ~2 seconds.
 
-### Getting the phone to the laptop — pick one, test it early
-
-| Route | How | Notes |
-|---|---|---|
-| **USB tether** *(recommended)* | Plug in, enable USB tethering, use the laptop's tether IP | **Independent of venue WiFi**, and it keeps the phone charged — which you need anyway to get it hot. Most reliable option on the day. |
-| Same WiFi | `VERIMESH_INGEST_URL=http://<laptop-lan-ip>:3000/...` | Fine at the desk. Venue WiFi often blocks client-to-client traffic — test it before relying on it. |
-| Cellular | Needs the app on a public URL | Only if we deploy `apps/web`. Not required for the demo. |
-
-Find the laptop IP with `ipconfig` (Windows). The dev server already listens on the LAN — Next prints
-a `Network:` URL on startup. If the phone cannot reach it, Windows Firewall is the usual cause.
+> If the ingest returns `404 unknown node`, run `POST /api/device/register` on the host first.
 
 ---
 
@@ -129,25 +203,68 @@ a `Network:` URL on startup. If the phone cannot reach it, Windows Firewall is t
 bash stress.sh 45 8      # 45 seconds, 8 workers
 ```
 
-Bounded and self-killing, with a pure-shell fallback if `stress-ng` is missing. Keep the phone
-**plugged in** — charging plus sustained CPU load is what actually moves battery temperature, and it
-is what gets you from ~29 °C to past `T_max` in about a minute. Short bursts only; phones throttle
-themselves safely, and we do not need or want a hot phone for long.
+Bounded and self-killing, with a pure-shell fallback if `stress-ng` is missing. Short bursts only —
+phones throttle themselves safely, and we do not need a hot phone for long.
 
-Bind it to a **Termux:Widget** button (`~/.shortcuts/heat-the-phone.sh` calling `stress.sh`) so the
-demo beat is literally *tapping the phone in your hand*.
+### 🔌 No cable also means no charging — so use the SoC sensor
 
-### Bounds — why these numbers
+The original plan assumed the phone was plugged in, because **charging plus CPU load** is what really
+moves *battery* temperature. On battery alone, expect battery temp to climb only a few degrees
+(~29 → 34 °C), which may never reach `T_max 41`.
 
-| Bound | Value | Reason |
+The **SoC temperature** has no such problem: it swings from ~40 °C idle to 70 °C+ under load within
+seconds, and it is just as real a sensor. The reporter can use it as the primary metric:
+
+```sh
+export VERIMESH_TEMP_SOURCE=soc     # battery (default) | soc | max
+```
+
+`max` uses whichever of the two is currently higher — a good default if you are unsure. Whatever it
+picks is sent as `tempSource`, and the inspector's *Physical device* note **changes its wording to
+name the sensor actually in use** ("the real SoC sensor from `/sys/class/thermal`"), so the narration
+stays truthful either way.
+
+Note that `/sys/class/thermal` is not always readable on a non-rooted S22. The reporter probes the
+zones on first tick and prints `soc -` if none are accessible. **Check that line before committing to
+`soc`** — if it is `-`, stay on `battery` and lower the bounds instead.
+
+### Bounds — measure, then set
+
+**Do this once the reporter is running, before rehearsing.** Watch the idle line for ~30 s, then run a
+burst and watch the peak:
+
+```sh
+bash stress.sh 45 8
+```
+
+Then set the bounds from what you actually saw, in the repo-root `.env.local`:
+
+| Bound | Default | How to pick it |
 |---|---|---|
-| `DEVICE_T_WARN` | 37 °C | An S22 idles ~28–31 °C. 37 is clearly above idle but reachable in seconds. |
-| `DEVICE_T_MAX` | 41 °C | Reachable in ~60–90 s of `stress-ng` while charging, and safely below the ~45 °C at which Android throttles hard and stops charging. |
-| `DEVICE_L_MAX` | 0.85 | `stress-ng --cpu 8` saturates the S22's cores; 0.85 is crossed immediately. |
+| `DEVICE_T_WARN` | 37 | ~4–5 °C above the idle you measured |
+| `DEVICE_T_MAX` | 41 | ~2–3 °C **below** the peak you measured, so the burst reliably crosses it |
+| `DEVICE_L_MAX` | 0.85 | Leave it. `stress-ng --cpu 8` saturates the S22's 8 cores and crosses this immediately. |
 
-All four are env-tunable (`DEVICE_T_WARN`, `DEVICE_T_MAX`, `DEVICE_L_MAX`, `DEVICE_X_NOMINAL`).
-**Measure the phone's real idle temperature at the venue and re-tune if the room is hot** — a cold
-room and a warm room differ by several degrees.
+Typical off-charger numbers: **battery source** → idle ~29, peak ~34, so `T_WARN 31` / `T_MAX 33`.
+**SoC source** → idle ~40, peak ~75, so `T_WARN 50` / `T_MAX 60`. Restart the dev server after editing
+`.env.local`.
+
+Because `L_max` is crossed by the burst on its own, **the beat works even if the thermal numbers
+disappoint** — load alone will drive the violation. The temperature is what makes it *narratively*
+good, not what makes it function.
+
+### Tap-to-heat (D8)
+
+Install **Termux:Widget** from F-Droid, then:
+
+```sh
+mkdir -p ~/.shortcuts
+printf '#!/data/data/com.termux/files/usr/bin/bash\nbash ~/stress.sh 45 8\n' > ~/.shortcuts/heat-the-phone
+chmod +x ~/.shortcuts/heat-the-phone
+```
+
+Add the Termux:Widget to the home screen and pick `heat-the-phone`. The demo beat becomes *tapping the
+phone in your hand*.
 
 ---
 
