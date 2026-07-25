@@ -108,7 +108,7 @@ around it silently and leave the next person to rediscover it.
 | Gate | When | Test | If it fails |
 |---|---|---|---|
 | **G1 · Contract freeze** | Sat **13:30** | `pnpm typecheck` green with ✦ authz types; registry + `schema.graphql` match | Nobody starts real work until this passes. It blocks all three streams. |
-| **G2 · THE GRAPH GO/NO-GO** | Sat **17:00** *(hard)* | A **Studio-hosted subgraph** indexes a real event from our Base Sepolia registry and a GraphQL query returns it | Fall back to local `graph-node` via docker against the same RPC (`STREAM-B.md` B2.5). Same manifest, same mappings — only the host changes. |
+| **G2 · THE GRAPH GO/NO-GO** | Sat **17:00** *(hard)* | ✅ **PASSED 17:05.** Studio-hosted subgraph indexes our Base Sepolia registry; live GraphQL returns all four event types, `hasIndexingErrors: false`. Endpoint: `https://api.studio.thegraph.com/query/1756967/verimesh-base-sepolia/v0.0.1` | *(moot — B2.5 docker fallback not needed)* |
 | **G3 · End-to-end** | Sun **02:00** | `ambiguous_cascade` runs headless: detect → history → LLM → verify → freeze → World ID → commit → on-chain → indexed | Cut to the demo-only path: seed the history, hand-drive the scenario in the UI. |
 
 ---

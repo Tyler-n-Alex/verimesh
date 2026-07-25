@@ -62,13 +62,27 @@ itself queries as trustless memory, and every reasoning blob is written immutabl
 
 ---
 
-## What makes the demo honest (acceptance harness, `pnpm --filter @verimesh/verifier acceptance`)
+## What makes the demo honest (acceptance harness)
+
+Both checks below were **run against the live subgraph and the real chain, 11/11 green**. The input
+is read straight off the registry's logs over RPC — never from the subgraph — so the subgraph-truth
+check compares two independent sources rather than checking the subgraph against itself.
+
+```
+pnpm --filter @verimesh/verifier snapshot -- --from 44613204 --out ../../chain-snapshot.json
+pnpm --filter @verimesh/verifier acceptance -- --input ../../chain-snapshot.json
+```
+
 
 - **Subgraph-truth check** — every decision committed on-chain comes back from a GraphQL query with
   matching fields. What the agent *remembers* equals what actually happened.
 - **Quorum-truth check** — the on-chain `HumanApproval` events for a resolved override contain
   exactly the distinct nullifiers the policy demanded. What the chain says was authorized equals
-  what the policy required.
+  what the policy required. *Scope, stated precisely: it checks the exact nullifier set, that there
+  are no duplicates, that the count meets the quorum recorded in the `Frozen` event, and that the
+  resolved action matches. The contract does not emit `operatorsRequired`, so the "one distinct
+  human per required operator" half is only independently auditable when the harness is fed from
+  the gate record rather than from chain logs.*
 - **Property suites** — `fast-check` over the verifier (a VERIFIED action never projects a state
   that breaches a physical invariant) and over the authorization policy (a cross-operator action
   never resolves on fewer than two distinct nullifiers; a T1/T2 action never resolves on a
@@ -78,8 +92,26 @@ itself queries as trustless memory, and every reasoning blob is written immutabl
 
 ## To paste before submitting
 
-- Subgraph query endpoint: `TODO` (B2.4)
-- Sample GraphQL query + its real response: `TODO` (B2.4)
+- Subgraph query endpoint: **done (B2.4)** — `https://api.studio.thegraph.com/query/1756967/verimesh-base-sepolia/v0.0.1`
+  (Studio: <https://thegraph.com/studio/subgraph/verimesh-base-sepolia>, slug
+  `verimesh-base-sepolia`, version `v0.0.1`, indexing Base Sepolia from block 44613204)
+- Sample GraphQL query + its real response: **done (B2.4)** — this is the query to run on stage:
+
+  ```graphql
+  {
+    decisions(first: 5, orderBy: ts, orderDirection: desc) {
+      nodeId operator action verdict authTier humanAuthorized txHash
+    }
+    approvals { worldIdNullifier operator approvalIndex }
+    overrides { chosenAction approvalsCollected }
+    nodeHistories { id incidentCount violationCount }
+  }
+  ```
+
+  It returns the two **distinct** nullifiers that authorized the override
+  (`0x…a11ce` / opA and `0x…0b0b` / opB), the resolved `SCALE_UP` with
+  `approvalsCollected: 2`, and `nodeHistories` showing `node-07` and `node-09` at
+  `incidentCount: 2` — the exact input the repeat-offender escalation reads.
 - Registry address on Base Sepolia + Basescan links: **done (B2.1)** —
   `0x0Fb557580E7C01Aed5D02622558216B9eb19c33c`,
   <https://sepolia.basescan.org/address/0x0Fb557580E7C01Aed5D02622558216B9eb19c33c>

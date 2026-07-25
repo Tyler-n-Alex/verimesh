@@ -13,3 +13,4 @@ generated/
 !.env.example
 .DS_Store
 .turbo/
+chain-snapshot.json

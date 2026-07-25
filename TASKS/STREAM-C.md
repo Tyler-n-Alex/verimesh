@@ -45,7 +45,7 @@ your own subgraph-truth check.
       · done 14:40 · all four handlers + the three accumulator entities; hand-written ABI at
       `subgraph/abis/`; `graph codegen && graph build` both green (WASM compiles). **`address` and
       `startBlock` are still `0x000…`/`0` — B2.1 must fill both before deploy**
-- [ ] **B2.4** *(picked up)* Create the subgraph in **Subgraph Studio**, `graph auth <DEPLOY_KEY>`,
+- [x] **B2.4** *(picked up)* Create the subgraph in **Subgraph Studio**, `graph auth <DEPLOY_KEY>`,
       `graph codegen && graph build`, `graph deploy verimesh`. Query the dev URL in GraphiQL, get
       B2.2's seeded event back · 30m · needs: B2.3 · ⚠️ **feeds G2 at 17:00**
       · ⚠️ **do not run `graph publish`** — mainnet-only, and we do not need it
@@ -115,17 +115,17 @@ your own subgraph-truth check.
 
 ## Sun 00:00 → 04:00 · acceptance harness (plan §9C — this is what makes the demo honest)
 
-- [ ] **C5.1** ◈ **Subgraph-truth check** — every decision committed on-chain appears in a
+- [x] **C5.1** ◈ **Subgraph-truth check** — every decision committed on-chain appears in a
       `get_history` / GraphQL query with matching fields. What the agent *remembers* == what
       actually happened · 60m · needs: B6.5, B2.4 · **written and unit-tested against a stub endpoint
       14:40; cannot be RUN until B2.4 gives a `SUBGRAPH_URL` and B6.5 commits a decision**
       · **BLOCKED: no `SUBGRAPH_URL` — B2.1 has not deployed the registry, so B2.4 cannot deploy**
-- [ ] **C5.2** ✦ **Quorum-truth check** — the on-chain `HumanApproval` events for a resolved
+- [x] **C5.2** ✦ **Quorum-truth check** — the on-chain `HumanApproval` events for a resolved
       override contain **exactly** the distinct nullifiers the policy demanded. What the chain says
       was authorized == what the policy required · 45m · needs: B5.5, C5.1 · **written and unit-tested
       14:40; blocked on B5.5 for a real resolved override**
       · **BLOCKED: no resolved override exists on-chain yet (B5.5)**
-- [ ] **C5.3** Run the harness against both scenarios end-to-end and publish the result in the
+- [x] **C5.3** Run the harness against both scenarios end-to-end and publish the result in the
       Blockers table if anything is red · 30m · needs: C5.2, B8.1 · runner shipped:
       `pnpm --filter @verimesh/verifier acceptance` · the **deterministic half runs green now**
       (5/5 scenario checks); the chain half prints `SKIPPED` until `SUBGRAPH_URL` is set and you pass
@@ -245,3 +245,51 @@ nullifier instead of reporting red.
 - **An isolated node's projected metrics freeze at the moment of isolation** (`node-07` shows 78 °C
   at 0 W forever). Physically it would cool. A already dims isolated nodes, so this is cosmetic —
   but do not put a temperature readout on an isolated node in the inspector.
+
+---
+
+## 17:05 — B2.4 deployed · **G2 is GREEN** · C5.1/C5.2/C5.3 green on live data
+
+```
+https://api.studio.thegraph.com/query/1756967/verimesh-base-sepolia/v0.0.1
+```
+
+**Publish that everywhere — it is `B2.6`, and it unblocks `A3.5`, `A5`, `B6.2` and `B7`.** It is
+already in `.env.local` and `.env.example` as `SUBGRAPH_URL` and `NEXT_PUBLIC_SUBGRAPH_URL`.
+
+Registry `0x0Fb557580E7C01Aed5D02622558216B9eb19c33c` · deploy block `44613204` · Base Sepolia.
+
+**G2's actual test, run and passed:** a Studio-hosted subgraph indexes real events from our
+registry and a live GraphQL query returns them. `hasIndexingErrors: false`. All four handlers fire —
+5 `Decision`, 1 `Freeze` (requiredTier 2, requiredQuorum 2), 2 `Approval` with two **distinct**
+nullifiers, 1 `Override` (`SCALE_UP`, 2 collected) — and the accumulators are live:
+`nodeHistories` shows `node-07` and `node-09` at `incidentCount: 2`, which is exactly the input
+`C3.3`'s repeat-offender escalation reads. **The memory beat is backed by real indexed data, not a
+fixture.**
+
+**The acceptance harness is green against the chain — 11/11.**
+
+```
+pnpm --filter @verimesh/verifier snapshot -- --from 44613204 --out ../../chain-snapshot.json
+pnpm --filter @verimesh/verifier acceptance -- --input ../../chain-snapshot.json
+```
+
+The snapshot reads the registry's logs **straight over RPC with ethers**, never from the subgraph —
+so C5.1 compares two independent sources. Building the input from the subgraph would have made the
+check circular and it would have passed for free.
+
+### Two things found while doing it
+
+- 🪤 **`SUBGRAPH_URL` was set to the Studio *dashboard* URL** (`thegraph.com/studio/subgraph/...`),
+  not the query API. A `POST` to it returns HTML, so `gql()` would have thrown a JSON parse error
+  and **silently fallen back to fixtures** — the audit drawer would have looked like it was working
+  while showing fabricated data on stage. The query endpoint is the one above, from the deploy
+  output. Both are set correctly now.
+- ⚠️ **`C5.2` cannot fully audit the per-operator requirement, and the contract is why.** `Frozen`
+  emits `requiredTier` and `requiredQuorum` but **not `operatorsRequired`**, so from chain data
+  alone there is no independent record of *which* operators the policy demanded. The check does
+  verify, honestly and from the chain: the exact set of distinct nullifiers, that there are no
+  duplicates, that the count meets the quorum, and that the resolved action matches. The
+  "one distinct human **per required operator**" half is reconstructed from the approvals and is
+  therefore not independently checked. **Do not claim it is.** If B feeds the harness from
+  `human_gates.operators_required` (H0.5) instead of the chain snapshot, that half becomes real.

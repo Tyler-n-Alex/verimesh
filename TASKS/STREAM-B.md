@@ -72,7 +72,7 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
       `graph codegen && graph build` both pass. Entity-key choices are documented in
       `subgraph/README.md` · **only `address`/`startBlock` are still placeholders — B2.1 fills them
       automatically**
-- [ ] **B2.4** Create the subgraph in **Subgraph Studio**, `graph auth <DEPLOY_KEY>`,
+- [x] **B2.4** Create the subgraph in **Subgraph Studio**, `graph auth <DEPLOY_KEY>`,
       `graph codegen && graph build`, `graph deploy verimesh`. Query the dev URL in GraphiQL and get
       B2.2's seeded event back · 30m · needs: B2.3 · **owner: C** · ⚠️ **feeds G2 at 17:00**
       · ⚠️ **do not run `graph publish`** — publishing is mainnet-only and we do not need it
@@ -84,8 +84,12 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
       · ⚠️ **Do not deploy the subgraph before the registry exists.** With `address: 0x000…0` it
       deploys happily and indexes nothing — which looks like a passing G2 and is not one.
       · **15:45 — step (2) is done.** Studio subgraph created, `graph auth` succeeded, `codegen` and
-      `build` re-verified. **B2.4 is now one command (`npx graph deploy <slug>`) behind one input:
-      your registry address.** Nothing else stands between us and the G2 gate.
+      `build` re-verified. · **DONE 17:05 — G2 PASSED.** Slug `verimesh-base-sepolia`, version
+      `v0.0.1`. Query endpoint (this is `B2.6`, publish it):
+      `https://api.studio.thegraph.com/query/1756967/verimesh-base-sepolia/v0.0.1`
+      All four handlers index; `hasIndexingErrors: false`. **B6.2 and B7.1 are unblocked.**
+      ⚠️ `SUBGRAPH_URL` had been set to the Studio *dashboard* URL — a POST there returns HTML and
+      A's `gql()` would have silently fallen back to fixtures. Fixed in `.env.local`/`.env.example`.
 - [ ] **B2.5** ⚠️ **G2 · 17:00 GO/NO-GO.** The subgraph ships either way — this is a *hosting*
       contingency, not a feature cut. If B2.4 is not green:
       1. local `graph-node` via docker-compose against the same RPC — same manifest, same mappings,

@@ -12,7 +12,8 @@
     "./harness": "./src/harness.ts"
   },
   "scripts": {
-    "acceptance": "tsx --env-file=../../.env.local src/bin/acceptance.ts"
+    "acceptance": "tsx --env-file=../../.env.local src/bin/acceptance.ts",
+    "snapshot": "tsx --env-file=../../.env.local src/bin/chain-snapshot.ts"
   },
   "dependencies": {
     "@verimesh/shared": "workspace:*"
