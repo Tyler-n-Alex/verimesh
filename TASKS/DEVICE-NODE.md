@@ -9,19 +9,29 @@ and — because its neighbour belongs to a different operator — genuinely driv
 quorum**. It kills the "it's just a simulation" objection, and because the *phone* is under load and
 not the render laptop, it cannot make the 3D demo lag.
 
-> ⚠️ **Narrate it precisely.** CPU load and battery temperature are genuine sensors. Throughput is a
-> *measured work rate* (a fixed busy-loop timed each tick), which is also real but is a derived
-> figure — say "measured work rate", not "throughput sensor". The handset has no fan, so fan speed
-> reads `—` rather than a fabricated number. **We deliberately do not apply the plan's `GAIN`
-> multiplier**: the number on screen is the number the sensor reported. Overclaiming loses Q&A trust,
-> and it is not needed — the phone crosses its own real bound on its own.
+> ⚠️ **Narrate it precisely.** Battery temperature is a genuine sensor. **CPU load is not what it was
+> originally specced to be** — on the S22 Ultra, Android denies `/proc/stat`, so the kernel's
+> utilisation counter is unavailable and the reporter measures **scheduler contention** instead. That
+> is a real kernel measurement (`run_delay` from `/proc/self/schedstat`), but it is *not* CPU
+> utilisation: it registers the CPU being **oversubscribed**, not merely busy. Say "the phone is
+> waiting for CPU", never "the phone is at 52% CPU". Throughput is a *measured work rate* (a fixed
+> busy-loop timed each tick) — say "measured work rate", not "throughput sensor", and note that on a
+> handset it tracks clock speed as much as contention, so it can *rise* under load when the governor
+> boosts. The handset has no fan, so fan speed reads `—` rather than a fabricated number. **We
+> deliberately do not apply the plan's `GAIN` multiplier**: the number on screen is the number that
+> was measured. Overclaiming loses Q&A trust, and it is not needed — the phone crosses its own real
+> bound on its own.
+>
+> The inspector rewords itself from `loadSource`, so what is on screen already names whichever
+> mechanism was used. See **What this handset will not give up** below.
 
 ---
 
-## Status — the path is built and proven; the handset is not yet attached
+## Status — the handset is live and reporting
 
-Everything below the phone is done and verified against the live database with a simulated handset
-(`services/device/fake-phone.js`). What remains is **~20 minutes on the phone itself**.
+The S22 Ultra is attached and ticking into the live database over Tailscale. What remains is the
+**tap-to-heat widget (D8)**, the **full-beat rehearsal (D9)** — which needs B's loop — and the
+**venue check (D10)**.
 
 - [x] **D0** Migration `supabase/migrations/0003_device_node.sql` — `nodes.kind` / `nodes.device_label` /
       `nodes.last_seen_at`, `telemetry.source`, plus indexes · **applied to Supabase and verified**
@@ -41,7 +51,13 @@ Everything below the phone is done and verified against the live database with a
       in the inspector showing battery %, SoC temperature, charging state, seconds-since-last-report,
       and a plain-English note on which figures are sensors
 - [x] **D6** This doc + `.env.example` additions + `NEXT_PUBLIC_DEVICE_*` wired into the env loader
-- [ ] **D7** **Phone setup on the actual S22** · ~20m · *the only remaining step* — see below
+- [x] **D7** **Phone setup on the actual S22** · done 23:10 · the handset is reporting live over
+      Tailscale. Took far longer than 20m: Android denies `/proc/stat`, `/proc/loadavg`,
+      `/proc/pressure/cpu` **and** `/sys/class/thermal` to unprivileged apps, so both of the sensors
+      this task assumed were free had to be rebuilt. Load is now scheduler contention from
+      `/proc/self/schedstat` over a 200ms window; temperature is battery-only and **no longer
+      classifies at all**. Measured: idle ~0.08, burst peak **0.57** against `L_max 0.28`. See
+      *What this handset will not give up*
 - [ ] **D8** Bind `stress.sh` to a **Termux:Widget** home-screen button so the beat is *tap the phone*
       · 10m · needs: D7
 - [ ] **D9** Rehearse the full beat: tap phone → device goes `violation` → agent proposes
@@ -206,14 +222,16 @@ fresh database or after someone re-runs the seed. It is idempotent — running i
    If you did install it, `termux-battery-status` must print JSON containing `"temperature"`.
 
    ### Is Termux:API needed?
-   It is the **only** source of battery temperature, battery percentage and charging state. Everything
-   else the reporter sends needs no add-on: CPU load (`/proc/stat`), SoC temperature
-   (`/sys/class/thermal`), memory (`/proc/meminfo`) and the measured work rate.
+   **On the S22 Ultra, yes — it is not optional.** It is the only source of battery temperature,
+   battery percentage and charging state, and because Android also denies `/sys/class/thermal` on this
+   handset there is **no SoC sensor to fall back to**. Without Termux:API the node reports no
+   temperature at all and the thermal half of the demo disappears. (The older advice here said you
+   could skip it off-charger and fall through to the SoC sensor — that fallback does not exist on this
+   device. See *What this handset will not give up*.)
 
-   - **Demoing on charger → install it.** Battery temperature is the sensor you want, and it only
-     exists via Termux:API.
-   - **Demoing off charger → skip it.** The reporter degrades cleanly: `batteryStatus()` returns null,
-     battery and charging read `—`, and temperature falls through to the SoC sensor.
+   What genuinely needs no add-on: memory (`/proc/meminfo`), the measured work rate, and CPU
+   contention (`/proc/self/schedstat`). Note that CPU **load** does *not* come from `/proc/stat` here —
+   that path is denied.
 4. **Stop Android killing it:** Settings → Apps → Termux → Battery → **Unrestricted**, then in the
    Termux session run `termux-wake-lock`.
 5. **Pull the scripts straight off the host** — no cable, no git, no auth. Substitute the host's
@@ -241,6 +259,68 @@ fresh database or after someone re-runs the seed. It is idempotent — running i
 
 ---
 
+## What this handset will not give up
+
+Measured on the actual S22 Ultra with `services/device/probe.js`. **These are SELinux denials on
+`untrusted_app`, not file permissions** — there is no Termux setting, package or flag that changes
+them, and rooting is the only thing that would.
+
+| Path | Result | Consequence |
+|---|---|---|
+| `/proc/stat` | `EACCES` | No kernel CPU utilisation. This is the big one. |
+| `/proc/loadavg`, `/proc/uptime` | `EACCES` | No fallback there either. |
+| `/proc/pressure/cpu` | `EACCES` | PSI would have been ideal; it is not available. |
+| `/sys/class/thermal` | `EACCES` | **No SoC temperature at all.** `VERIMESH_TEMP_SOURCE=soc` and `max` are dead on this phone — battery is the only temperature it has. |
+| `power_supply/current_now`, `voltage_now` | `EACCES` | Power always reads `—`. Do not claim it. |
+| `/proc/self/schedstat` | ✅ readable | A process may always read its own. **This is what load is built on.** |
+| `/proc/meminfo` | ✅ readable | Memory is real. |
+| `termux-battery-status` | ✅ readable | Battery temp/%/charging. Times out under heavy load — see below. |
+| `os.loadavg()` | readable but useless | Returns ~19–21 whether idle or saturated. libuv uses `sysinfo(2)`, so it dodges procfs, but the value has no discrimination. A dead end; do not chase it. |
+
+### Why the probe window is 200ms
+
+`run_delay` counts nanoseconds spent runnable but waiting for a CPU. How much accrues depends
+enormously on how long we stay continuously runnable: a thread that just woke from a 2s sleep has low
+vruntime, preempts the CPU hogs immediately, and is handed a core on demand. Sampled over a short
+window it therefore reads ~0% **whether the phone is idle or on fire**.
+
+Sweep from `probe.js`, idle vs `node heat.js 45 16`:
+
+| window | idle | saturated |
+|---|---|---|
+| 10ms | 0.0% | 0.9% |
+| 20ms | 1.9% | 0.4% |
+| 50ms | 0.0% | 0.4% |
+| 100ms | 0.0% | 36.3% |
+| **200ms** | **0.1%** | **52.3%** |
+| 400ms | 0.4% | 59.5% |
+| 800ms | 0.1% | 63.7% |
+
+The advantage runs out between 50 and 100ms. 200ms is the default: 52 points of separation, where
+400ms buys 7 more for twice the cost. At 200ms per 2s tick the probe costs 10% of one core — about
+1.25% of the phone — and reads 0.1% idle, so it does not manufacture the load it measures. Override
+with `VERIMESH_PROBE_MS` if a different handset needs it.
+
+### ⚠️ Worker count changes the reading
+
+Contention measures *oversubscription*. `heat.js 45 8` puts 8 hogs on 8 cores and the reporter still
+gets a core fairly easily; `heat.js 45 16` genuinely oversubscribes and is what produced 52.3%.
+**Calibrate with the exact command the demo will run**, and prefer 16.
+
+### ⚠️ Battery temperature drops out under a heavy burst
+
+At 16 workers, `termux-battery-status` timed out (`ETIMEDOUT` at 5s) — Termux:API is starved along
+with everything else. The reporter therefore polls battery on its own cadence and caches the last
+good sample rather than blocking a tick on it, so ingest never stalls; the tick line marks the value
+`(Ns old)` once it lags, and drops it to `—` past `VERIMESH_BATTERY_MAX_AGE_MS` (12s).
+
+The practical consequence for the demo: **during a heavy burst the temperature may go stale exactly
+when you want to point at it.** Battery temp decays slowly, so the reliable choreography is to let
+the burst drive the *contention* violation, then stop it — the sensor comes back within a tick or
+two and the elevated temperature is there to show. Rehearse it that way round.
+
+---
+
 ## Making it fail on cue (D8)
 
 ⚠️ **`stress-ng` is not in Termux's default repo** — `pkg install stress-ng` returns *unable to locate
@@ -261,27 +341,74 @@ and handles Ctrl-C.
 either entry point works. Short bursts only — phones throttle themselves safely, and we do not need a
 hot phone for long.
 
-### 🔌 Which temperature sensor — depends on whether the phone is charging
+### 🔌 Temperature: real, but **not** the trigger — measured, not assumed
 
-**Charging plus CPU load** is what really moves *battery* temperature. Pick accordingly:
+`VERIMESH_TEMP_SOURCE` has only one usable setting on this handset: **`battery`**. `soc` and `max`
+depend on `/sys/class/thermal`, which Android denies here, so there is no second sensor to fall back
+to or take the max of.
 
-| Situation | `VERIMESH_TEMP_SOURCE` | Why |
-|---|---|---|
-| **On charger** *(the demo setup)* | **`battery`** (the default) | Charging + load takes battery temp from ~29 °C past 41 °C in about a minute. It is the sensor the plan intended, and "real battery temperature" is the cleanest thing to say out loud. **Requires Termux:API** — it is the only source of battery temp. |
-| Off charger | `soc` | On battery alone, battery temp climbs only a few degrees (~29 → 34 °C) and may never reach `T_max 41`. SoC temp swings ~40 → 70 °C+ within seconds and is just as real a sensor. Needs no add-on. |
-| Unsure / mixed | `max` | Uses whichever of the two is currently higher. |
+**Earlier guidance in this doc claimed charging plus load would take battery temp "from ~29 °C past
+41 °C in about a minute". That is not what happens.** Measured on the S22 Ultra:
 
-```sh
-export VERIMESH_TEMP_SOURCE=battery   # battery (default) | soc | max
+| | measured |
+|---|---|
+| resting | ~33 °C (29.9 °C from cold) |
+| after a 45s / 16-worker burst | **35.5 °C** |
+| rise | **+2.5 °C**, gradually |
+| fall afterwards | slower still — minutes, not visibly at all in the moment |
+
+A battery has far too much thermal mass to swing on demand. So:
+
+> **Contention is the trigger. Temperature is context.**
+
+So temperature is **structurally excluded from classification**:
+
+```
+DEVICE_TEMP_GATES=false
+DEVICE_T_WARN=36
+DEVICE_T_MAX=40
 ```
 
-Whichever it uses is sent as `tempSource`, and the inspector's *Physical device* note **rewords itself
-to name the sensor actually in use**, so the narration stays truthful either way.
+`DEVICE_TEMP_GATES=false` makes `classifyDevice` ignore temperature entirely — it is measured,
+stored, charted and narrated, but it cannot set status. The two bounds are still set above the
+35.5 °C this handset reaches, so nothing depends on the flag alone.
 
-⚠️ **On charger, keep bursts to 30–45 s.** Charging plus sustained full-core load heats a phone fast,
-and near ~45 °C Android throttles hard and stops charging — which would stall the very effect you are
-demonstrating. It is also just not good for the battery. Short bursts are enough: `T_max 41` is
-crossed well before that.
+This is deliberately a flag rather than just out-of-reach bounds. Bounds you have merely placed high
+still trip on a hot day, in a warm venue, or after a longer burst than you rehearsed — and they would
+trip into a state that takes minutes to clear. The flag cannot be surprised.
+
+The node then returns to `healthy` the moment a burst ends, because contention resets in one tick
+while the battery is still warm — which makes the demo **repeatable**, the property that matters most
+when rehearsing or running it twice.
+
+The UI reflects this without being told separately: the temperature sparkline drops its bound line,
+its row reads *Temperature · not a trigger*, and the *Physical device* note says the sensor is shown
+because it genuinely climbs but is not used to set status.
+
+Temperature is still a genuine sensor and still worth pointing at. What you cannot say is that it
+crossed a bound, because on this handset, in a demo-length window, it does not.
+
+<details>
+<summary>If you want temperature to trip anyway</summary>
+
+Set `DEVICE_TEMP_GATES=true` and `DEVICE_T_MAX=35`. A burst will then cross it — but the battery
+stays above 35 °C for **minutes** afterwards, so the node stays stuck in `violation` and the next run
+cannot start from `healthy`. Acceptable for a single scripted run, bad for rehearsal. Do not choose
+this without testing the cooldown you actually get in the room.
+
+</details>
+
+### 🐛 Why the bounds are sent with each reading
+
+`NodeInspector` is a client component, and `DEVICE_T_WARN` / `DEVICE_T_MAX` / `DEVICE_L_MAX` are not
+`NEXT_PUBLIC_` prefixed, so Next strips them from the browser bundle. Before this was fixed the
+inspector silently fell back to the module defaults — it would have drawn `L_max 85%` and withheld
+the red tint while the server was classifying against `0.28`. The ingest route now writes the bounds
+it actually used into `nodes.metrics.bounds`, and the inspector prefers those, so the chart and the
+status cannot disagree.
+
+⚠️ **Keep bursts to 30–45 s regardless.** Sustained full-core load is not good for the battery, and
+near ~45 °C Android throttles hard — which would stall the very effect being demonstrated.
 
 Note `/sys/class/thermal` is not always readable on a non-rooted S22. The reporter probes the zones on
 the first tick and prints `soc -` if none are accessible — so if you ever need the `soc` fallback,
@@ -301,17 +428,16 @@ Then set the bounds from what you actually saw, in the repo-root `.env.local`:
 
 | Bound | Default | How to pick it |
 |---|---|---|
-| `DEVICE_T_WARN` | 37 | ~4–5 °C above the idle you measured |
-| `DEVICE_T_MAX` | 41 | ~2–3 °C **below** the peak you measured, so the burst reliably crosses it |
-| `DEVICE_L_MAX` | 0.85 | Leave it. `stress-ng --cpu 8` saturates the S22's 8 cores and crosses this immediately. |
+| `DEVICE_TEMP_GATES` | true | **Set `false`.** Temperature stops classifying altogether while still being measured and shown. See *Temperature: real, but not the trigger*. |
+| `DEVICE_T_WARN` | 37 | **Set 36** — above the 35.5 °C peak this handset reaches. Belt and braces alongside the flag. |
+| `DEVICE_T_MAX` | 41 | **Set 40.** Same reason. Battery temp rises ~2.5 °C per burst and falls over minutes, so a bound it can cross is a bound it stays stuck above. |
+| `DEVICE_L_MAX` | 0.85 | **Do not leave it at 0.85 when load source is `contention`.** That default assumes CPU utilisation, which saturates near 1.0. Measured from the running reporter on an S22 Ultra: **idle 0.08–0.10, burst 0.36–0.43 with 16 workers.** **Set 0.28** — violation clears the burst's floor by ~30%, and the warning band at 0.238 sits well above idle. Re-measure if you change the worker count. |
 
-Typical off-charger numbers: **battery source** → idle ~29, peak ~34, so `T_WARN 31` / `T_MAX 33`.
-**SoC source** → idle ~40, peak ~75, so `T_WARN 50` / `T_MAX 60`. Restart the dev server after editing
-`.env.local`.
+Restart the dev server after editing `.env.local` — bounds are read at startup.
 
-Because `L_max` is crossed by the burst on its own, **the beat works even if the thermal numbers
-disappoint** — load alone will drive the violation. The temperature is what makes it *narratively*
-good, not what makes it function.
+Because `L_max` is crossed by the burst on its own, **the beat works even though the thermal numbers
+disappoint** — contention alone drives the violation, and on this handset that is not a fallback but
+the plan. The temperature is supporting colour, not the mechanism.
 
 ### Tap-to-heat (D8)
 
@@ -319,7 +445,7 @@ Install **Termux:Widget** from F-Droid, then:
 
 ```sh
 mkdir -p ~/.shortcuts
-printf '#!/data/data/com.termux/files/usr/bin/bash\ncd ~ && node heat.js 45 8\n' > ~/.shortcuts/heat-the-phone
+printf '#!/data/data/com.termux/files/usr/bin/bash\ncd ~ && node heat.js 45 16\n' > ~/.shortcuts/heat-the-phone
 chmod +x ~/.shortcuts/heat-the-phone
 ```
 

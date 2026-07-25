@@ -6,6 +6,7 @@ import {
   authorizeDevice,
   classifyDevice,
   deviceOwnsStatus,
+  deviceTempGates,
 } from "@/lib/device";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +23,10 @@ interface TelemetryBody {
   charging?: boolean | null;
   label?: string | null;
   tempSource?: string | null;
+  loadSource?: string | null;
 }
+
+const LOAD_SOURCES = new Set(["procstat", "pressure", "contention", "none"]);
 
 interface NodeRow {
   id: string;
@@ -100,7 +104,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: telemetryError.message }, { status: 500 });
   }
 
-  const classification = classifyDevice(temp, load);
+  const loadSource =
+    body.loadSource && LOAD_SOURCES.has(body.loadSource)
+      ? body.loadSource
+      : "procstat";
+
+  const classification = classifyDevice(temp, load, DEVICE_BOUNDS, loadSource);
   const holdStatus = node.status === "isolated" || node.status === "awaiting_human";
   const nextStatus =
     deviceOwnsStatus() && !holdStatus ? classification.status : node.status;
@@ -118,6 +127,18 @@ export async function POST(request: Request) {
       battery,
       charging: body.charging ?? null,
       tempSource: body.tempSource === "soc" ? "soc" : "battery",
+      // The bounds this reading was actually judged against, and whether
+      // temperature was allowed to judge at all. The inspector is a client
+      // component, so it cannot read DEVICE_T_MAX / DEVICE_L_MAX — those are
+      // not NEXT_PUBLIC_ and Next strips them from the browser bundle, leaving
+      // it drawing the hardcoded defaults while the server used something else.
+      // Sending them removes any chance of the two disagreeing.
+      bounds: DEVICE_BOUNDS,
+      tempGates: deviceTempGates(),
+      // Which mechanism produced `load`. On handsets that deny /proc/stat this
+      // is "contention", which is not the same quantity as cpu utilisation —
+      // the inspector needs it so its wording can name what was measured.
+      loadSource,
     },
     last_seen_at: nowIso,
     updated_at: nowIso,

@@ -32,6 +32,18 @@ export function deviceOwnsStatus(): boolean {
   return process.env.DEVICE_OWNS_STATUS !== "false";
 }
 
+// Whether temperature is allowed to drive status at all.
+//
+// A phone battery has too much thermal mass to be a demo trigger: measured on
+// an S22 Ultra a full burst moves it +2.5C over ~45s and it then sheds that
+// heat over minutes. Any bound low enough to cross is a bound the node stays
+// stuck above, so the next run cannot start from healthy. With this off,
+// temperature is still measured, stored and displayed — it just does not
+// classify. Contention is the trigger.
+export function deviceTempGates(): boolean {
+  return process.env.DEVICE_TEMP_GATES !== "false";
+}
+
 export function deviceTokenConfigured(): boolean {
   return Boolean(process.env.DEVICE_TOKEN);
 }
@@ -55,32 +67,44 @@ export type DeviceStatus =
   | "isolated"
   | "offline";
 
+// These strings are quoted verbatim — they land in the events table and in the
+// reasoning trace, so they are read aloud during the demo. Say what was
+// actually measured: on a handset that denies /proc/stat the number is
+// scheduler contention, and calling it "cpu load" would be an overclaim in the
+// most visible place we have.
+function loadNoun(loadSource?: string | null): string {
+  return loadSource === "contention" ? "cpu contention" : "cpu load";
+}
+
 export function classifyDevice(
   temp: number | null,
   load: number | null,
-  bounds: DeviceBounds = DEVICE_BOUNDS
+  bounds: DeviceBounds = DEVICE_BOUNDS,
+  loadSource?: string | null,
+  tempGates: boolean = deviceTempGates()
 ): { status: DeviceStatus; reasons: string[] } {
   const reasons: string[] = [];
+  const noun = loadNoun(loadSource);
 
-  if (temp !== null && temp >= bounds.T_max) {
+  if (tempGates && temp !== null && temp >= bounds.T_max) {
     reasons.push(
       `battery temperature ${temp.toFixed(1)}C at or above T_max ${bounds.T_max}C`
     );
   }
   if (load !== null && load >= bounds.L_max) {
     reasons.push(
-      `cpu load ${(load * 100).toFixed(0)}% at or above L_max ${(bounds.L_max * 100).toFixed(0)}%`
+      `${noun} ${(load * 100).toFixed(0)}% at or above L_max ${(bounds.L_max * 100).toFixed(0)}%`
     );
   }
   if (reasons.length > 0) return { status: "violation", reasons };
 
-  if (temp !== null && temp >= bounds.T_warn) {
+  if (tempGates && temp !== null && temp >= bounds.T_warn) {
     reasons.push(
       `battery temperature ${temp.toFixed(1)}C above T_warn ${bounds.T_warn}C`
     );
   }
   if (load !== null && load >= bounds.L_max * 0.85) {
-    reasons.push(`cpu load ${(load * 100).toFixed(0)}% approaching L_max`);
+    reasons.push(`${noun} ${(load * 100).toFixed(0)}% approaching L_max`);
   }
   if (reasons.length > 0) return { status: "warning", reasons };
 

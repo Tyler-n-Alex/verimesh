@@ -5,6 +5,21 @@ export interface DeviceMetrics {
   battery?: number | null;
   charging?: boolean | null;
   tempSource?: string | null;
+  // Which mechanism produced `load`. "procstat" is the kernel's own utilisation
+  // counter; "contention" is scheduler run-delay, used on handsets where
+  // Android denies /proc/stat. They are different quantities, so the inspector
+  // must name whichever was actually measured.
+  loadSource?: string | null;
+  // Sent by the ingest route so the browser uses the bounds the server actually
+  // classified with, rather than the module defaults it would otherwise fall
+  // back to (DEVICE_* env vars are not NEXT_PUBLIC_ and do not reach the client).
+  bounds?: {
+    T_warn: number;
+    T_max: number;
+    L_max: number;
+    X_nominal: number;
+  } | null;
+  tempGates?: boolean | null;
 }
 
 export interface NodeRow {
@@ -181,6 +196,9 @@ export function mapNode(row: NodeRow): MeshNode {
       battery: row.metrics?.battery ?? null,
       charging: row.metrics?.charging ?? null,
       tempSource: row.metrics?.tempSource ?? null,
+      loadSource: row.metrics?.loadSource ?? null,
+      bounds: row.metrics?.bounds ?? null,
+      tempGates: row.metrics?.tempGates ?? null,
     },
   };
 }

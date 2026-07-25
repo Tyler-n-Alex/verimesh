@@ -61,15 +61,30 @@ export function NodeInspector() {
   }
 
   const isDevice = node.kind === "device";
-  const bounds = isDevice ? DEVICE_BOUNDS : BOUNDS.get(node.id);
+  // Prefer the bounds the ingest route reported. DEVICE_BOUNDS is only a
+  // fallback here: this is a client component, so the DEVICE_* env vars are not
+  // in the bundle and it would otherwise silently draw the module defaults.
+  const bounds = isDevice
+    ? (node.device.bounds ?? DEVICE_BOUNDS)
+    : BOUNDS.get(node.id);
+  // Temperature is measured and shown, but on a handset it is too slow to be a
+  // trigger, so it does not classify. Nothing should imply that it does.
+  const tempGates = isDevice ? node.device.tempGates !== false : true;
   const points = series ?? [];
   const token = statusToken(node.status);
   const stale = isDevice ? isDeviceStale(node.lastSeenAt, now) : false;
 
-  const overTemp = bounds ? node.metrics.temp >= bounds.T_warn : false;
+  const overTemp =
+    bounds && tempGates ? node.metrics.temp >= bounds.T_warn : false;
   const overLoad = bounds ? node.metrics.load >= bounds.L_max : false;
   const tempTone = overTemp ? token.hex : undefined;
   const loadTone = overLoad ? token.hex : undefined;
+
+  // On a handset that denies /proc/stat the number is scheduler contention, not
+  // utilisation. Label it for what it is rather than letting "Load" imply a
+  // counter we never got to read.
+  const byContention = isDevice && node.device.loadSource === "contention";
+  const loadLabel = byContention ? "Contention" : "Load";
 
   return (
     <div className="flex flex-col">
@@ -101,7 +116,11 @@ export function NodeInspector() {
       ) : null}
 
       <div className="grid grid-cols-3 gap-x-4 gap-y-3.5 px-3.5 py-3">
-        <Metric label="Load" value={pct(node.metrics.load)} tone={loadTone} />
+        <Metric
+          label={loadLabel}
+          value={pct(node.metrics.load)}
+          tone={loadTone}
+        />
         <Metric
           label="Temperature"
           value={num(node.metrics.temp)}
@@ -120,15 +139,19 @@ export function NodeInspector() {
 
       <div className="flex flex-col gap-3 border-t border-hairline px-3.5 py-3">
         <SeriesRow
-          label="Temperature"
+          label={tempGates ? "Temperature" : "Temperature · not a trigger"}
           values={points.map((p) => p.temp)}
           color={tempTone ?? NEUTRAL.dim}
-          bound={bounds?.T_max}
-          boundLabel={bounds ? `T_max ${bounds.T_max}` : undefined}
+          // No bound line when temperature does not classify — drawing one
+          // would imply the node is heading for a threshold it cannot trip.
+          bound={tempGates ? bounds?.T_max : undefined}
+          boundLabel={
+            tempGates && bounds ? `T_max ${bounds.T_max}` : undefined
+          }
           latest={`${num(node.metrics.temp)} °C`}
         />
         <SeriesRow
-          label="Load"
+          label={loadLabel}
           values={points.map((p) => p.load * 100)}
           color={loadTone ?? NEUTRAL.dim}
           bound={bounds ? bounds.L_max * 100 : undefined}
@@ -248,7 +271,28 @@ function DevicePanel({
           </>
         ) : (
           <>
-            Load is real CPU utilisation from <span className="data">/proc/stat</span>.
+            {node.device.loadSource === "contention" ? (
+              <>
+                Contention is scheduler run delay from{" "}
+                <span className="data">/proc/self/schedstat</span> — the share of
+                time this process was runnable but waiting for a CPU. Android
+                denies <span className="data">/proc/stat</span> on this handset,
+                so the kernel&rsquo;s own utilisation counter is unavailable. It
+                is a real kernel measurement, but it registers the CPU being
+                oversubscribed rather than merely busy.
+              </>
+            ) : node.device.loadSource === "pressure" ? (
+              <>
+                Load is CPU pressure from{" "}
+                <span className="data">/proc/pressure/cpu</span> — the share of
+                time some task was stalled waiting for a CPU.
+              </>
+            ) : (
+              <>
+                Load is real CPU utilisation from{" "}
+                <span className="data">/proc/stat</span>.
+              </>
+            )}{" "}
             Temperature is{" "}
             {node.device.tempSource === "soc" ? (
               <>
@@ -261,8 +305,18 @@ function DevicePanel({
                 <span className="data">termux-battery-status</span>
               </>
             )}
-            . Throughput is a measured work rate, so thermal throttling shows up
-            as a genuine drop. This handset has no fan, so fan speed reads —.
+            {node.device.tempGates === false ? (
+              <>
+                , shown because it genuinely climbs under load but{" "}
+                <strong className="text-ink-dim">not used to set status</strong>
+                : a battery holds too much heat to rise or fall on demo
+                timescales, so contention alone classifies this node
+              </>
+            ) : null}
+            . Throughput is a measured work rate rather than a sensor, and on a
+            handset it tracks clock speed as much as contention — it can rise
+            when the governor boosts under load. This handset has no fan, so fan
+            speed reads —.
           </>
         )}
       </p>

@@ -9,6 +9,7 @@ const ALLOWED = new Set([
   "heat.js",
   "stress.sh",
   "fake-phone.js",
+  "probe.js",
 ]);
 
 export async function GET(request: Request) {
