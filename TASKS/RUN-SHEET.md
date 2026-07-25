@@ -203,6 +203,8 @@ Restart the agent loop between runs so it does not act on stale in-memory faults
 
 | Symptom | Actual cause | Move |
 |---|---|---|
+| **"Mesh unreachable"** or **"Event stream unreachable"** | **Supabase**, not the subgraph — `link === "error" && !hydrated` in `MeshViewport.tsx`. There is no "subgraph unreachable" state anywhere in the UI | Confirm the DB answers: `curl "$NEXT_PUBLIC_SUPABASE_URL/rest/v1/nodes?select=id&limit=1" -H "apikey: $NEXT_PUBLIC_SUPABASE_ANON_KEY"`. If that is 200, the page is holding a dead realtime socket — reload it. If the vars are missing from the browser bundle, restart the dev server (see next row) |
+| A `NEXT_PUBLIC_*` change in `.env.local` has no effect | `next.config.mjs` reads the file **once at config load** and passes it through `env: publicEnv`, which Next inlines. A running dev server never picks up an edit | **Restart `pnpm --filter @verimesh/web dev`.** Anything added to `.env.local` mid-session — including `NEXT_PUBLIC_SUBGRAPH_URL` — is invisible until you do |
 | Audit drawer shows plausible data that does not match what just happened | `SUBGRAPH_URL` is the dashboard URL, or the endpoint is down — `gql()` fell back to **fixtures** | Fix the env var. Do not demo the drawer until it is fixed; fixture data on stage is the worst outcome in this project |
 | Freeze modal rejects a legitimate scan with `NOT_ON_ALLOWLIST` | `B5.6` enrolled the wrong nullifier form | Nullifiers are canonical lowercase `0x`, zero-padded to 32 bytes. Never compare raw strings |
 | Any World ID scan is accepted, including strangers | `authz_config` allowlists are empty → `selfEnroll` is on | This is `B5.6`. Until fixed, **do not claim the allowlist is enforced** |
