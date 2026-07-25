@@ -32,12 +32,41 @@ the endpoint in later. Ask B for a fixture at 15:00 if the spike is still runnin
 
 ## Sat 13:30 → 16:00 · shell + live data
 
-- [ ] **A0** `apps/web` — Next.js (app router) + Tailwind + **HeroUI v3**; dark shell, layout
-      regions for mesh / trace / event log / inspector · 60m · needs: H0.7
-- [ ] **A1** Supabase realtime hook — subscribe to `nodes`, `events`, `proposals`, `verdicts`,
-      `human_gates`; render the seeded node list as plain rows first · 45m · needs: B0
-- [ ] **A1.5** zustand store fed by the realtime hook; one shape the 3D and the panels both read
-      · 30m · needs: A1
+- [x] **A0** `apps/web` — Next.js (app router) + Tailwind + **HeroUI v3**; dark shell, layout
+      regions for mesh / trace / event log / inspector · 60m · needs: H0.7 · done 14:15
+      - stack as installed: Next **15.5.21** · React **19.2** · Tailwind **4.3** · HeroUI **3.2.2**
+        · R3F **9.6** + drei **10.7** + postprocessing **3.0** · three **0.185** · zustand **5**
+        · IDKit **4.2.1**. **HeroUI v3 is out of beta** — install `@heroui/react@^3.2.2`, *not*
+        `@beta` as the `heroui-react` skill still says. Peer-requires React ≥19 + Tailwind ≥4, which
+        is why R3F 9 (not 8) is the correct pairing.
+      - Next 15.5 deliberately, not 16 — Turbopack-by-default + three.js is an unknown we do not
+        need to price in tonight.
+      - ⚠️ **env trap (supersedes H0.10 for this app):** Next reads `.env.local` from the *app*
+        directory, not the monorepo root, so the root `.env.local` was invisible and every panel
+        rendered "mesh unreachable". Fixed in `apps/web/load-root-env.mjs`, called from
+        `next.config.mjs`: it parses the root `.env.local`, merges it into `process.env`, and
+        re-exports the `NEXT_PUBLIC_*` keys via the `env` config. It also mirrors
+        `SUBGRAPH_URL` → `NEXT_PUBLIC_SUBGRAPH_URL`, `REGISTRY_EXPLORER`/`REGISTRY_ADDRESS` →
+        their `NEXT_PUBLIC_*` twins, so **B and C only ever fill in the root file** and the browser
+        still sees what it needs. **Do not create `apps/web/.env.local`.**
+- [x] **A1** Supabase realtime hook — subscribe to `nodes`, `events`, `proposals`, `verdicts`,
+      `human_gates`; render the seeded node list as plain rows first · 45m · needs: B0 · done 14:15
+      - `src/hooks/useMeshRealtime.ts`: one channel, six `postgres_changes` subscriptions
+        (`nodes`, `events`, `proposals`, `verdicts`, `human_gates`, `human_approvals`) plus a
+        parallel initial `select` for all nine tables. Verified live against the seeded mesh:
+        **16 nodes · opA 6 / opB 6 / opC 4**, link pill reads `supabase live`.
+      - ℹ️ **for B:** `commits` and `telemetry` are *not* in the `supabase_realtime` publication
+        (`0001`/`0002` never added them). Not blocking — the hook polls `commits` every 4s and the
+        sparkline accumulates from the realtime `nodes.metrics` updates. If you add
+        `alter publication supabase_realtime add table public.commits, public.telemetry;` the poll
+        can go away, but nothing waits on it.
+- [x] **A1.5** zustand store fed by the realtime hook; one shape the 3D and the panels both read
+      · 30m · needs: A1 · done 14:15
+      - `src/store/mesh.ts` is the single shape: `nodes` keyed by id + stable `nodeIds`, `edges`
+        (each pre-tagged `crossOperator`, which is what the T2 beat reads), `events`/`proposals`
+        newest-first and capped, `verdicts`/`commits` keyed by `proposal_id`, `approvals` keyed by
+        `gate_id`, a capped per-node `telemetry` ring, and the UI selections
+        (`selectedNodeId`, `activeGateId`, `auditProposalId`).
 
 ---
 

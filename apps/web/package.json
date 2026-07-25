@@ -1,0 +1,38 @@
+{
+  "name": "@verimesh/web",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@heroui/react": "^3.2.2",
+    "@heroui/styles": "^3.2.2",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.1",
+    "@react-three/postprocessing": "^3.0.4",
+    "@supabase/supabase-js": "^2.45.0",
+    "@verimesh/shared": "workspace:*",
+    "@worldcoin/idkit": "^4.2.1",
+    "@worldcoin/idkit-core": "^4.2.2",
+    "next": "15.5.21",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tailwind-variants": "^3.2.2",
+    "three": "^0.185.1",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^22.7.4",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@types/three": "^0.185.0",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.5.4"
+  }
+}
