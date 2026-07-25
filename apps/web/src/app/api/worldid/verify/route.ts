@@ -1,15 +1,101 @@
 import { NextResponse } from "next/server";
 import {
   authzConfig,
+  checkApproval,
   distinctNullifiers,
+  hasBudget,
   normalizeNullifier,
+  type ApprovalRejection,
   type AuthTier,
+  type AuthorizationRequirement,
+  type AuthzConfig,
+  type AuthzContext,
+  type HumanApproval,
 } from "@verimesh/shared";
 import { ADMIN_MISSING, getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
 
 const VERIFY_BASE = "https://developer.world.org/api/v4/verify";
+
+const OVERRIDE_BUDGET_QUERY = `
+query OverrideBudget($nullifiers: [Bytes!]!) {
+  humanAuthorities(where: { worldIdNullifier_in: $nullifiers }) {
+    worldIdNullifier
+    overrideCount
+  }
+}
+`;
+
+const REJECTION_STATUS: Record<ApprovalRejection, number> = {
+  DUPLICATE_HUMAN: 409,
+  NOT_ON_ALLOWLIST: 403,
+  BUDGET_EXCEEDED: 403,
+  OPERATOR_NOT_REQUIRED: 403,
+};
+
+function rejectionMessage(
+  rejection: ApprovalRejection,
+  operator: string,
+  required: string[],
+  budget: number
+): string {
+  if (rejection === "DUPLICATE_HUMAN") {
+    return "this human has already authorized this decision";
+  }
+  if (rejection === "NOT_ON_ALLOWLIST") {
+    return `this human is not enrolled to ${operator}`;
+  }
+  if (rejection === "BUDGET_EXCEEDED") {
+    return `this human has already used their ${budget} overrides for this window`;
+  }
+  return required.length > 0
+    ? `${operator} is not one of the operators this gate requires (${required.join(", ")})`
+    : `${operator} is not required by this gate`;
+}
+
+async function overrideCountsFor(nullifier: string): Promise<{
+  counts: Record<string, number>;
+  source: "subgraph" | "unavailable";
+}> {
+  const url =
+    process.env.SUBGRAPH_URL ?? process.env.NEXT_PUBLIC_SUBGRAPH_URL ?? "";
+  if (!url) return { counts: {}, source: "unavailable" };
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        query: OVERRIDE_BUDGET_QUERY,
+        variables: { nullifiers: [nullifier] },
+      }),
+      cache: "no-store",
+    });
+
+    const body = (await res.json()) as {
+      data?: {
+        humanAuthorities?: {
+          worldIdNullifier: string;
+          overrideCount: number;
+        }[];
+      };
+      errors?: { message: string }[];
+    };
+
+    if (!res.ok || body.errors?.length || !body.data) {
+      return { counts: {}, source: "unavailable" };
+    }
+
+    const counts: Record<string, number> = {};
+    for (const row of body.data.humanAuthorities ?? []) {
+      counts[row.worldIdNullifier] = row.overrideCount;
+    }
+    return { counts, source: "subgraph" };
+  } catch {
+    return { counts: {}, source: "unavailable" };
+  }
+}
 
 interface VerifyBody {
   rp_id?: string;
@@ -31,6 +117,29 @@ interface GateRecord {
 interface ApprovalRecord {
   nullifier: string;
   operator: string;
+  chosen_action: string | null;
+  ts: number;
+}
+
+function selfEnrollCheck(
+  collected: HumanApproval[],
+  candidate: HumanApproval,
+  config: AuthzConfig,
+  context: AuthzContext
+): { accepted: boolean; rejection?: ApprovalRejection } {
+  for (const existing of collected) {
+    try {
+      if (normalizeNullifier(existing.nullifier) === candidate.nullifier) {
+        return { accepted: false, rejection: "DUPLICATE_HUMAN" };
+      }
+    } catch {
+      continue;
+    }
+  }
+  if (!hasBudget(config, context, candidate.nullifier)) {
+    return { accepted: false, rejection: "BUDGET_EXCEEDED" };
+  }
+  return { accepted: true };
 }
 
 function operatorsForNullifier(nullifier: string): string[] {
@@ -194,25 +303,9 @@ export async function POST(request: Request) {
   const required = gate.operators_required ?? [];
   const eligible = required.filter((op) => enrolledFor.includes(op));
 
-  if (eligible.length === 0 && !selfEnroll) {
-    return NextResponse.json(
-      {
-        ok: false,
-        rejection: "NOT_ON_ALLOWLIST",
-        error:
-          required.length > 0
-            ? `this human is not enrolled to ${required.join(" or ")}`
-            : "this human is not on any operator allowlist",
-        nullifier,
-        enrolledFor,
-      },
-      { status: 403 }
-    );
-  }
-
   const { data: existing, error: existingError } = await supabase
     .from("human_approvals")
-    .select("nullifier,operator")
+    .select("nullifier,operator,chosen_action,ts")
     .eq("gate_id", gate.id);
 
   if (existingError) {
@@ -224,28 +317,83 @@ export async function POST(request: Request) {
 
   const priorRows = (existing ?? []) as ApprovalRecord[];
   const priorNullifiers = distinctNullifiers(priorRows.map((r) => r.nullifier));
-
-  if (priorNullifiers.includes(nullifier)) {
-    return NextResponse.json(
-      {
-        ok: false,
-        rejection: "DUPLICATE_NULLIFIER",
-        error: "this human has already authorized this decision",
-        nullifier,
-        enrolledFor,
-      },
-      { status: 409 }
-    );
-  }
-
   const takenOperators = new Set(priorRows.map((r) => r.operator));
+
   const operator =
     eligible.find((op) => !takenOperators.has(op)) ??
+    (selfEnroll ? required.find((op) => !takenOperators.has(op)) : undefined) ??
     eligible[0] ??
     enrolledFor[0] ??
+    (selfEnroll ? required[0] : undefined) ??
     "unenrolled";
 
   const ts = Date.now();
+
+  const requirement: AuthorizationRequirement = {
+    tier: gate.required_tier,
+    quorum: gate.required_quorum,
+    operatorsRequired:
+      required.length > 0
+        ? required
+        : enrolledFor.length > 0
+          ? [enrolledFor[0]]
+          : [],
+    reason: gate.reason ?? "",
+  };
+
+  const collected: HumanApproval[] = priorRows.map((row) => ({
+    nullifier: row.nullifier,
+    operator: row.operator,
+    chosenAction: row.chosen_action ?? "",
+    ts: Number(row.ts),
+  }));
+
+  const candidate: HumanApproval = {
+    nullifier,
+    operator,
+    chosenAction: body.chosenAction ?? "",
+    ts,
+  };
+
+  const budget = await overrideCountsFor(nullifier);
+  const context: AuthzContext = {
+    incidentCount: 0,
+    overrideCounts: budget.counts,
+  };
+
+  const check = selfEnroll
+    ? selfEnrollCheck(collected, candidate, authzConfig as AuthzConfig, context)
+    : checkApproval(
+        requirement,
+        collected,
+        candidate,
+        authzConfig as AuthzConfig,
+        context
+      );
+
+  if (!check.accepted && check.rejection) {
+    return NextResponse.json(
+      {
+        ok: false,
+        rejection:
+          check.rejection === "DUPLICATE_HUMAN"
+            ? "DUPLICATE_NULLIFIER"
+            : check.rejection,
+        error: rejectionMessage(
+          check.rejection,
+          operator,
+          required,
+          (authzConfig as AuthzConfig).budgetPerWindow
+        ),
+        nullifier,
+        enrolledFor,
+        overrideCount: budget.counts[nullifier] ?? 0,
+        budgetPerWindow: (authzConfig as AuthzConfig).budgetPerWindow,
+        budgetSource: budget.source,
+      },
+      { status: REJECTION_STATUS[check.rejection] }
+    );
+  }
   const { error: insertError } = await supabase.from("human_approvals").insert({
     gate_id: gate.id,
     nullifier,
@@ -270,9 +418,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const collected = distinctNullifiers([...priorNullifiers, nullifier]);
+  const distinct = distinctNullifiers([...priorNullifiers, nullifier]);
   const operatorsCovered = new Set([...takenOperators, operator]);
-  const quorumMet = collected.length >= gate.required_quorum;
+  const quorumMet = distinct.length >= gate.required_quorum;
   const operatorsMet = required.every((op) => operatorsCovered.has(op));
   const satisfied = quorumMet && operatorsMet;
 
@@ -280,7 +428,7 @@ export async function POST(request: Request) {
     ts,
     type: "approval",
     node_id: null,
-    message: `${operator} authorized gate ${gate.id} — ${collected.length} of ${gate.required_quorum} distinct human${gate.required_quorum === 1 ? "" : "s"}`,
+    message: `${operator} authorized gate ${gate.id} — ${distinct.length} of ${gate.required_quorum} distinct human${gate.required_quorum === 1 ? "" : "s"}`,
   });
 
   if (satisfied) {
@@ -293,7 +441,7 @@ export async function POST(request: Request) {
       ts: ts + 1,
       type: "override",
       node_id: null,
-      message: `gate ${gate.id} satisfied — ${collected.length} distinct humans across ${[...operatorsCovered].join(" + ")}`,
+      message: `gate ${gate.id} satisfied — ${distinct.length} distinct humans across ${[...operatorsCovered].join(" + ")}`,
     });
   }
 
@@ -303,8 +451,12 @@ export async function POST(request: Request) {
     nullifier,
     operator,
     enrolledFor,
-    selfEnrolled: eligible.length === 0,
-    collected: collected.length,
+    selfEnrolled: selfEnroll,
+    allowlistEnforced: !selfEnroll,
+    overrideCount: budget.counts[nullifier] ?? 0,
+    budgetPerWindow: (authzConfig as AuthzConfig).budgetPerWindow,
+    budgetSource: budget.source,
+    collected: distinct.length,
     requiredQuorum: gate.required_quorum,
     operatorsRequired: required,
     operatorsCovered: [...operatorsCovered],
