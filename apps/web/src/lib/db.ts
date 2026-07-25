@@ -1,5 +1,11 @@
 import type { AuthTier, GridNode, NodeMetrics, NodeStatus } from "@verimesh/shared";
 
+export interface DeviceMetrics {
+  socTemp?: number | null;
+  battery?: number | null;
+  charging?: boolean | null;
+}
+
 export interface NodeRow {
   id: string;
   name: string;
@@ -8,8 +14,11 @@ export interface NodeRow {
   y: number;
   z: number;
   status: string;
-  metrics: Partial<NodeMetrics> | null;
+  metrics: (Partial<NodeMetrics> & DeviceMetrics) | null;
   updated_at: string;
+  kind?: string | null;
+  device_label?: string | null;
+  last_seen_at?: string | null;
 }
 
 export interface EdgeRow {
@@ -101,6 +110,10 @@ export interface ApprovalRow {
 
 export interface MeshNode extends GridNode {
   updatedAt: number;
+  kind: "sim" | "device";
+  deviceLabel: string | null;
+  lastSeenAt: number | null;
+  device: DeviceMetrics;
 }
 
 export interface TelemetryPoint {
@@ -159,6 +172,14 @@ export function mapNode(row: NodeRow): MeshNode {
     status: coerceStatus(row.status),
     metrics: coerceMetrics(row.metrics),
     updatedAt: row.updated_at ? Date.parse(row.updated_at) : Date.now(),
+    kind: row.kind === "device" ? "device" : "sim",
+    deviceLabel: row.device_label ?? null,
+    lastSeenAt: row.last_seen_at ? Date.parse(row.last_seen_at) : null,
+    device: {
+      socTemp: row.metrics?.socTemp ?? null,
+      battery: row.metrics?.battery ?? null,
+      charging: row.metrics?.charging ?? null,
+    },
   };
 }
 

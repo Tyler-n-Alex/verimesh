@@ -4,6 +4,9 @@ import { Html } from "@react-three/drei";
 import { useMeshStore } from "@/store/mesh";
 import { NEUTRAL, statusToken } from "@/lib/palette";
 import { worldPos } from "@/lib/layout";
+import { isDeviceStale } from "@/lib/device";
+import { useNow } from "@/hooks/useNow";
+import { LiveBadge } from "@/components/ui/LiveBadge";
 
 export function NodeLabels() {
   const nodeIds = useMeshStore((s) => s.nodeIds);
@@ -31,6 +34,12 @@ function NodeLabel({ nodeId }: { nodeId: string }) {
     const node = s.nodes[nodeId];
     return node ? worldPos(node).join(",") : null;
   });
+  const isDevice = useMeshStore((s) => s.nodes[nodeId]?.kind === "device");
+  const deviceLabel = useMeshStore(
+    (s) => s.nodes[nodeId]?.deviceLabel ?? s.nodes[nodeId]?.name ?? nodeId
+  );
+  const lastSeenAt = useMeshStore((s) => s.nodes[nodeId]?.lastSeenAt ?? null);
+  const now = useNow(isDevice ? 1000 : 60000);
 
   if (!position) return null;
 
@@ -38,6 +47,7 @@ function NodeLabel({ nodeId }: { nodeId: string }) {
   const token = statusToken(status);
   const detailed = selected || status !== "healthy";
   const urgent = token.severity === "danger" || token.severity === "notice";
+  const stale = isDevice ? isDeviceStale(lastSeenAt, now) : false;
 
   return (
     <Html
@@ -47,6 +57,7 @@ function NodeLabel({ nodeId }: { nodeId: string }) {
       style={{ pointerEvents: "none", userSelect: "none" }}
     >
       <div className="flex flex-col items-center gap-1 whitespace-nowrap">
+        {isDevice ? <LiveBadge label={deviceLabel} stale={stale} /> : null}
         <span
           className="flex items-center gap-1.5 rounded border px-1.5 py-[3px] text-[11.5px] leading-none"
           style={{

@@ -4,10 +4,14 @@ import { useMemo, useState } from "react";
 import { ACTIONS, blueprint, type Action } from "@verimesh/shared";
 import { EmptyState } from "@/components/ui/Panel";
 import { Metric, OperatorTag, StatusTag } from "@/components/ui/Pill";
+import { LiveBadge } from "@/components/ui/LiveBadge";
 import { Sparkline } from "@/components/ui/Sparkline";
-import { clock, num, pct } from "@/lib/format";
+import { ago, clock, num, pct } from "@/lib/format";
 import { NEUTRAL, statusToken } from "@/lib/palette";
+import { DEVICE_BOUNDS, isDeviceStale } from "@/lib/device";
+import { useNow } from "@/hooks/useNow";
 import { useMeshStore } from "@/store/mesh";
+import type { MeshNode } from "@/lib/db";
 
 interface Bounds {
   T_warn: number;
@@ -34,6 +38,7 @@ export function NodeInspector() {
   const edges = useMeshStore((s) => s.edges);
   const nodes = useMeshStore((s) => s.nodes);
   const selectNode = useMeshStore((s) => s.selectNode);
+  const now = useNow(1000);
 
   const neighbours = useMemo(() => {
     if (!selectedNodeId) return [];
@@ -55,9 +60,11 @@ export function NodeInspector() {
     );
   }
 
-  const bounds = BOUNDS.get(node.id);
+  const isDevice = node.kind === "device";
+  const bounds = isDevice ? DEVICE_BOUNDS : BOUNDS.get(node.id);
   const points = series ?? [];
   const token = statusToken(node.status);
+  const stale = isDevice ? isDeviceStale(node.lastSeenAt, now) : false;
 
   const overTemp = bounds ? node.metrics.temp >= bounds.T_warn : false;
   const overLoad = bounds ? node.metrics.load >= bounds.L_max : false;
@@ -82,9 +89,16 @@ export function NodeInspector() {
         <div className="flex flex-wrap items-center gap-2">
           <OperatorTag operator={node.operator} />
           <StatusTag status={node.status} attention />
+          {isDevice ? (
+            <LiveBadge label={node.deviceLabel ?? node.name} stale={stale} />
+          ) : null}
           <span className="data text-[11.5px] text-ink-faint">{node.id}</span>
         </div>
       </div>
+
+      {isDevice ? (
+        <DevicePanel node={node} stale={stale} now={now} />
+      ) : null}
 
       <div className="grid grid-cols-3 gap-x-4 gap-y-3.5 px-3.5 py-3">
         <Metric label="Load" value={pct(node.metrics.load)} tone={loadTone} />
@@ -172,6 +186,76 @@ export function NodeInspector() {
       </div>
 
       <ActionMenu nodeId={node.id} nodeName={node.name} />
+    </div>
+  );
+}
+
+function DevicePanel({
+  node,
+  stale,
+  now,
+}: {
+  node: MeshNode;
+  stale: boolean;
+  now: number;
+}) {
+  return (
+    <div className="flex flex-col gap-2.5 border-b border-hairline bg-abyss px-3.5 py-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <h4 className="text-[12px] font-medium text-ink-faint">
+          Physical device
+        </h4>
+        <span className="num text-[11.5px] text-ink-faint">
+          {node.lastSeenAt
+            ? `last report ${ago(node.lastSeenAt, now)} ago`
+            : "no report yet"}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-x-4 gap-y-2.5">
+        <Metric
+          label="Battery"
+          value={node.device.battery !== null ? `${node.device.battery}` : "—"}
+          unit={node.device.battery !== null ? "%" : undefined}
+        />
+        <Metric
+          label="SoC temp"
+          value={
+            node.device.socTemp !== null && node.device.socTemp !== undefined
+              ? num(node.device.socTemp)
+              : "—"
+          }
+          unit={node.device.socTemp ? "°C" : undefined}
+        />
+        <Metric
+          label="Charging"
+          value={
+            node.device.charging === null || node.device.charging === undefined
+              ? "—"
+              : node.device.charging
+                ? "Yes"
+                : "No"
+          }
+        />
+      </div>
+
+      <p className="text-[12px] leading-relaxed text-ink-faint">
+        {stale ? (
+          <>
+            The handset has stopped reporting. The agent falls back to
+            simulating this node, so a dropout degrades the demo rather than
+            breaking it.
+          </>
+        ) : (
+          <>
+            Load is real CPU utilisation from <span className="data">/proc/stat</span>{" "}
+            and temperature is the real battery sensor via{" "}
+            <span className="data">termux-battery-status</span>. Throughput is a
+            measured work rate, so thermal throttling shows up as a genuine
+            drop. This handset has no fan, so fan speed reads —.
+          </>
+        )}
+      </p>
     </div>
   );
 }

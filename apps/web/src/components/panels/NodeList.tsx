@@ -3,7 +3,10 @@
 import { useMemo } from "react";
 import { EmptyState, SkeletonRows } from "@/components/ui/Panel";
 import { StatusTag } from "@/components/ui/Pill";
+import { LiveBadge } from "@/components/ui/LiveBadge";
 import { NEUTRAL, statusToken } from "@/lib/palette";
+import { isDeviceStale } from "@/lib/device";
+import { useNow } from "@/hooks/useNow";
 import { useMeshStore } from "@/store/mesh";
 
 export function NodeList() {
@@ -14,6 +17,7 @@ export function NodeList() {
   const linkError = useMeshStore((s) => s.linkError);
   const selectedNodeId = useMeshStore((s) => s.selectedNodeId);
   const selectNode = useMeshStore((s) => s.selectNode);
+  const now = useNow(2000);
 
   const rows = useMemo(
     () => nodeIds.map((id) => nodes[id]).filter(Boolean),
@@ -75,6 +79,13 @@ export function NodeList() {
                     }}
                   />
                   <span className="text-[13px] text-ink">{node.name}</span>
+                  {node.kind === "device" ? (
+                    <LiveBadge
+                      label={node.deviceLabel ?? node.name}
+                      stale={isDeviceStale(node.lastSeenAt, now)}
+                      compact
+                    />
+                  ) : null}
                 </div>
               </td>
               <td className="px-3.5 py-2 text-[12.5px] text-ink-dim">

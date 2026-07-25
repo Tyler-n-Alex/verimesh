@@ -1,0 +1,162 @@
+import { NextResponse } from "next/server";
+import { ADMIN_MISSING, getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import {
+  DEVICE_BOUNDS,
+  DEVICE_NODE_ID,
+  authorizeDevice,
+  classifyDevice,
+  deviceOwnsStatus,
+} from "@/lib/device";
+
+export const dynamic = "force-dynamic";
+
+interface TelemetryBody {
+  nodeId?: string;
+  load?: number | null;
+  temp?: number | null;
+  throughput?: number | null;
+  power?: number | null;
+  mem?: number | null;
+  socTemp?: number | null;
+  battery?: number | null;
+  charging?: boolean | null;
+  label?: string | null;
+}
+
+interface NodeRow {
+  id: string;
+  status: string;
+  kind: string;
+}
+
+function finite(value: unknown): number | null {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+export async function POST(request: Request) {
+  const denied = authorizeDevice(request);
+  if (denied) {
+    return NextResponse.json({ error: denied }, { status: 401 });
+  }
+
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    return NextResponse.json({ error: ADMIN_MISSING }, { status: 500 });
+  }
+
+  let body: TelemetryBody;
+  try {
+    body = (await request.json()) as TelemetryBody;
+  } catch {
+    return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
+  }
+
+  const nodeId = body.nodeId ?? DEVICE_NODE_ID;
+
+  const { data: node, error: nodeError } = await supabase
+    .from("nodes")
+    .select("id,status,kind")
+    .eq("id", nodeId)
+    .maybeSingle<NodeRow>();
+
+  if (nodeError) {
+    return NextResponse.json({ error: nodeError.message }, { status: 500 });
+  }
+  if (!node) {
+    return NextResponse.json(
+      {
+        error: `unknown node ${nodeId} — POST /api/device/register first`,
+      },
+      { status: 404 }
+    );
+  }
+
+  const load = finite(body.load);
+  const temp = finite(body.temp);
+  const throughput = finite(body.throughput);
+  const power = finite(body.power);
+  const mem = finite(body.mem);
+  const socTemp = finite(body.socTemp);
+  const battery = finite(body.battery);
+
+  const ts = Date.now();
+  const nowIso = new Date(ts).toISOString();
+
+  const { error: telemetryError } = await supabase.from("telemetry").insert({
+    node_id: nodeId,
+    ts,
+    load,
+    temp,
+    throughput,
+    power,
+    mem,
+    fan_rpm: null,
+    source: "real",
+  });
+
+  if (telemetryError) {
+    return NextResponse.json({ error: telemetryError.message }, { status: 500 });
+  }
+
+  const classification = classifyDevice(temp, load);
+  const holdStatus = node.status === "isolated" || node.status === "awaiting_human";
+  const nextStatus =
+    deviceOwnsStatus() && !holdStatus ? classification.status : node.status;
+
+  const update: Record<string, unknown> = {
+    metrics: {
+      ts,
+      load: load ?? 0,
+      temp: temp ?? 0,
+      throughput: throughput ?? 0,
+      power: power ?? 0,
+      mem: mem ?? 0,
+      fanRpm: 0,
+      socTemp,
+      battery,
+      charging: body.charging ?? null,
+    },
+    last_seen_at: nowIso,
+    updated_at: nowIso,
+  };
+
+  if (nextStatus !== node.status) update.status = nextStatus;
+  if (body.label) update.device_label = body.label;
+
+  const { error: updateError } = await supabase
+    .from("nodes")
+    .update(update)
+    .eq("id", nodeId);
+
+  if (updateError) {
+    return NextResponse.json({ error: updateError.message }, { status: 500 });
+  }
+
+  const transitioned = nextStatus !== node.status;
+
+  if (transitioned) {
+    const detail =
+      classification.reasons.length > 0
+        ? classification.reasons.join("; ")
+        : "back inside its envelope";
+    await supabase.from("events").insert({
+      ts,
+      type: nextStatus === "healthy" ? "device" : "anomaly",
+      node_id: nodeId,
+      message: `${node.id} ${node.status} -> ${nextStatus}: ${detail}`,
+    });
+  }
+
+  return NextResponse.json({
+    ok: true,
+    nodeId,
+    status: nextStatus,
+    previousStatus: node.status,
+    transitioned,
+    statusOwnedByIngest: deviceOwnsStatus(),
+    held: holdStatus,
+    bounds: DEVICE_BOUNDS,
+    reasons: classification.reasons,
+  });
+}

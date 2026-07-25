@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { NodeInstances } from "@/components/mesh/NodeInstances";
 import { EdgeLines } from "@/components/mesh/EdgeLines";
 import { NodeLabels } from "@/components/mesh/NodeLabels";
+import { DeviceMarker } from "@/components/mesh/DeviceMarker";
 import { CameraRig } from "@/components/mesh/CameraRig";
 import { PerfProbe } from "@/components/mesh/PerfProbe";
 import { useMeshStore } from "@/store/mesh";
@@ -75,6 +76,7 @@ function SceneContents() {
 
       <EdgeLines />
       <NodeInstances />
+      <DeviceMarker />
       <NodeLabels />
       <PerfProbe />
 

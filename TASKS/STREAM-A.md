@@ -422,6 +422,34 @@ the top bar now says **Unreachable**, so it will not be mistaken for live on sta
 
 ---
 
+## A8 · Live device node (base plan §9E) — tracked separately
+
+The Galaxy S22 as a **real physical node** in the mesh has its own tracking doc:
+**[`DEVICE-NODE.md`](DEVICE-NODE.md)**.
+
+Built and verified against the live database with a simulated handset; the only step left is ~20
+minutes on the phone itself. Summary of what landed in `apps/web`:
+
+- `supabase/migrations/0003_device_node.sql` (**applied**) — `nodes.kind` / `device_label` /
+  `last_seen_at`, `telemetry.source`.
+- `POST /api/device/register` — idempotent; places `device-s22` (opC) at `[5,0,2]` with a link to
+  opC's `node-15` **and a cross-operator link to opB's `node-11`**, so isolating the phone is a real
+  **T2 quorum**. The existing opA `node-07` → opB `node-12` path is untouched, so we now have two
+  independent T2 stories and B/C are unaffected.
+- `POST /api/device/telemetry` — bearer-token ingest. **The phone never holds a Supabase key**, which
+  is a deliberate departure from §9E's "demo-scoped insert key" (that would have needed an anon
+  `INSERT` policy on `telemetry`, letting anyone with the publishable key forge telemetry).
+- `services/device/` — the Termux reporter, a bounded `stress.sh` burst, and `fake-phone.js`, a laptop
+  stand-in that made this whole track buildable without the handset.
+- UI — `Live · Galaxy S22` / `No signal` badge in the label, roster and inspector, a ring marker in
+  the 3D, and a *Physical device* block naming which figures are real sensors.
+- **`DEVICE_OWNS_STATUS=true`** lets the ingest classify status while B's loop is down; flip it to
+  `false` when B is live and the plan's ownership split (phone owns metrics, agent owns status)
+  applies unchanged. Either way the ingest **never overwrites `isolated`/`awaiting_human`**, so a
+  freeze cannot be cleared by the next telemetry tick.
+
+---
+
 ## Handoff · what is left, and what it is waiting on
 
 **All 25 Stream-A tasks are built, typechecked, `pnpm build`-clean and committed.** Three cannot be
