@@ -163,3 +163,12 @@ const requirement = requireAuthorization(
 - **A3.6** — `requirement.reason` is written to be shown in the freeze modal verbatim; it already
   names the operators and the breach.
 - Run `pnpm test` for the suites and `pnpm --filter @verimesh/verifier acceptance` for the harness.
+
+### One thing that will look like a bug and is not
+
+`packages/shared/src/authz_config.json` still has **empty nullifier arrays** (H0.4 — enrolment is
+`B5.6`). Until the two demo identities are enrolled, `checkApproval` correctly rejects every scan
+with `NOT_ON_ALLOWLIST` and no T1 or T2 gate can ever resolve. That is fail-closed and deliberate:
+personhood is not authority. But if `B5.6` slips, the freeze modal will reject a real World ID scan
+on stage and it will look like the World integration is broken. Enrol both identities early and run
+`benign_spike` (T0, needs no human) to sanity-check the rest of the path independently.
