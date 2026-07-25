@@ -21,6 +21,8 @@ const baseMetrics = {
   fanRpm: 2100,
 };
 
+const DEVICE_NODE_ID = process.env.NEXT_PUBLIC_DEVICE_NODE_ID ?? "device-s22";
+
 async function seed() {
   const ts = Date.now();
 
@@ -32,6 +34,7 @@ async function seed() {
     y: n.pos[1],
     z: n.pos[2],
     status: "healthy",
+    kind: n.id === DEVICE_NODE_ID ? "device" : "sim",
     metrics: { ts, ...baseMetrics },
   }));
 
@@ -58,16 +61,18 @@ async function seed() {
 
   if (edgesError) throw edgesError;
 
-  const telemetry = blueprint.nodes.map((n) => ({
-    node_id: n.id,
-    ts,
-    load: baseMetrics.load,
-    temp: baseMetrics.temp,
-    throughput: baseMetrics.throughput,
-    power: baseMetrics.power,
-    mem: baseMetrics.mem,
-    fan_rpm: baseMetrics.fanRpm,
-  }));
+  const telemetry = blueprint.nodes
+    .filter((n) => n.id !== DEVICE_NODE_ID)
+    .map((n) => ({
+      node_id: n.id,
+      ts,
+      load: baseMetrics.load,
+      temp: baseMetrics.temp,
+      throughput: baseMetrics.throughput,
+      power: baseMetrics.power,
+      mem: baseMetrics.mem,
+      fan_rpm: baseMetrics.fanRpm,
+    }));
 
   const { error: telemetryError } = await supabase
     .from("telemetry")

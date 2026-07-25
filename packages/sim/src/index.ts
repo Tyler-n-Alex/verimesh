@@ -87,7 +87,7 @@ function toGridState(nodes: DbNode[], edges: DbEdge[]): GridState {
 async function loadState(supabase: SupabaseClient): Promise<GridState> {
   const [{ data: nodes, error: nodesError }, { data: edges, error: edgesError }] =
     await Promise.all([
-      supabase.from("nodes").select("*"),
+      supabase.from("nodes").select("*").neq("kind", "device"),
       supabase.from("edges").select("from_node,to_node,weight"),
     ]);
 
