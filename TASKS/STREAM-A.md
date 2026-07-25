@@ -10,12 +10,15 @@ Skills: [`world-id`](../.claude/skills/world-id/SKILL.md) · [`subgraph`](../.cl
 `apps/web/` is **empty**. You are building from zero, and you also picked up **B4** and **B5.1** in
 the G1 rebalance (both are Next.js API routes that belong in your app anyway).
 
-## ✅ You are unblocked — start now
+## ✅ STREAM A IS BUILT — every box below is ticked (as of 17:15)
 
-H0 is frozen and pushed. `pnpm install`, then **A0 needs nothing from anyone** — start it this
-minute. Everything through **A4.2 is B-independent** once B runs the seed
-(`pnpm --filter @verimesh/agent seed`, ~2 min). That is **~7 hours of runway** with no further
-dependency on B.
+`apps/web` is live: `pnpm --filter @verimesh/web dev` → <http://localhost:3000>. `pnpm typecheck`
+and `pnpm build` are both green. See **Handoff** at the bottom of this file for the only three
+things still outstanding — all of them credentials, none of them code.
+
+**B2.6 did not block the Graph track.** Every Graph view is built against a fixture shaped exactly
+like `subgraph/schema.graphql` and flips to live the moment `SUBGRAPH_URL` is set, with a badge that
+makes it impossible to demo a fixture believing it is live. Details under **A3.5.1**.
 
 Import types from `@verimesh/shared` — they are final. `AuthTier`, `AuthorizationRequirement`,
 `HumanApproval` and `DecisionRecord` are what the quorum modal and audit drawer render.
@@ -321,6 +324,59 @@ the endpoint in later. Ask B for a fixture at 15:00 if the spike is still runnin
       - 🚨 **BLOCKED on a funded 0G wallet, not on code:** `ZEROG_PRIVATE_KEY` is empty in `.env.local`,
         so the route returns a clean `503 missing ZEROG_PRIVATE_KEY` instead of uploading. Per the
         skill, the faucet caps ~0.1 OG/day/wallet — **claim it early.**
-- [ ] **A6.1** Empty / loading / error states everywhere. A blank panel during the demo reads as
-      broken · 45m
-- [ ] **A6.2** Full pass on the demo laptop at demo resolution, projector-legible text · 30m
+- [x] **A6.1** Empty / loading / error states everywhere. A blank panel during the demo reads as
+      broken · 45m · done 17:15
+      - three shared primitives (`EmptyState` with `neutral`/`waiting`/`error` tones, `SkeletonRows`,
+        and the link/source badges) applied to every panel, and each empty state **names the fix**:
+        "no nodes seeded → run `pnpm --filter @verimesh/agent seed`", "mesh unreachable → *the actual
+        Supabase error*", "World ID is not configured: missing `WORLDID_RP_ID`, …".
+      - 🐛 **found and fixed a real bug doing this pass:** the trace's step headlines never rendered.
+        Each `<Step>` receives five conditional children, so `Boolean(children)` was `true` even when
+        all five were `null` — the headline branch was dead and the idle trace showed six bare labels.
+        Now uses `Children.toArray`, which drops nulls.
+      - the **idle trace is now the strongest empty state in the app**: each waiting step explains what
+        it will do ("the one LLM call, via 0G Compute, with telemetry + history in context",
+        "deterministic projection — VERIFIED / VIOLATION / ESCALATE"), so a judge who arrives before the
+        loop runs reads the architecture instead of six blank rows.
+      - every API route degrades to a specific `503`/`4xx` naming the missing env var rather than
+        failing opaquely — verified by calling all five with credentials absent.
+- [x] **A6.2** Full pass on the demo laptop at demo resolution, projector-legible text · 30m · done 17:15
+      - ✦ **added a projector toggle** in the top bar cycling **100% / 115% / 130%**, persisted to
+        `localStorage`. It scales the entire console via CSS `zoom` with
+        `height: calc(100vh / var(--ui-scale))` so it never overflows (verified:
+        `body.scrollWidth === innerWidth` at 130%). The freeze modal and audit drawer render
+        *outside* the zoomed subtree, because `position: fixed` inside a zoomed ancestor mis-resolves
+        its containing block.
+      - 🐛 **camera framing was measuring the wrong thing.** It derived distance from the canvas's
+        pixel aspect, which CSS `zoom` makes unreliable — at 130% the mesh fell off the bottom of the
+        viewport. `CameraRig` now **fits the mesh to the actual frustum** from `camera.fov` and
+        `camera.aspect` (taking the max of the vertical and horizontal fits) and re-checks every frame
+        against a cached key, so it is self-correcting at any size and costs nothing when nothing changed.
+      - 🐛 **the legend was clipping the mesh.** It was a bottom-left canvas overlay sitting exactly
+        where the lower nodes land. Moved into the mesh panel header (`MeshLegend`), which costs zero
+        canvas area and wraps to a second row when narrow — `Panel`'s header grew from fixed `h-9` to
+        `min-h-9` + `flex-wrap` to allow it.
+      - **verified all 16 nodes frame correctly at 1920×1080, at 1366×768 (projector), and at 130%
+        zoom**, holding 60fps / 1 draw call throughout.
+      - `pnpm build` passes: 5 API routes, 239 kB First Load JS on `/`.
+      - ⚠️ **do not run `pnpm build` while `pnpm dev` is running** — they share `.next` and the build
+        overwrites the dev server's chunks, which then 500s on every request. `rm -rf apps/web/.next`
+        and restart dev if it happens.
+
+---
+
+## Handoff · what is left, and what it is waiting on
+
+**All 25 Stream-A tasks are built, typechecked, `pnpm build`-clean and committed.** Three cannot be
+*closed out* by code alone — each is waiting on a credential someone has to fetch, and each already
+fails with a message naming exactly what is missing:
+
+| Waiting on | Fills | Unblocks |
+|---|---|---|
+| Developer Portal app | `NEXT_PUBLIC_WORLDID_APP_ID`, `WORLDID_RP_ID`, `WORLDID_SIGNING_KEY` | the literal live scan in **A3.6.1** |
+| Two enrolled identities (**B5.6**) | the `authz_config.json` operator arrays | the real allowlist check in **A3.6.2/A3.6.3** — until then any human is accepted, see B5.1's self-enrol note |
+| Funded 0G wallet | `ZEROG_PRIVATE_KEY` | the actual upload in **B4** |
+| Studio deploy (**B2.6**) | `SUBGRAPH_URL` | swaps every Graph view from `fixture` to `subgraph · Nms`; **nothing is blocked meanwhile** |
+
+**The shared Supabase DB was left exactly as `B0a` seeded it** — 16 nodes, 25 edges, 2 seed events,
+and every other table empty. Rehearsal rows written while verifying the tiers were deleted.
