@@ -33,6 +33,7 @@ import {
   gridFingerprint,
   loadGridState,
   logEvent,
+  relevantNodeIds,
 } from "./db";
 import { buildObservation, detectAnomaly } from "./detect";
 
@@ -281,7 +282,8 @@ async function runCycle(supabase: SupabaseClient): Promise<void> {
   if (detection.kind === "NO_OP") return;
 
   reasoning = true;
-  const fingerprintAtStart = await gridFingerprint(supabase);
+  const watchedNodeIds = relevantNodeIds(state, detection.nodeId);
+  const fingerprintAtStart = await gridFingerprint(supabase, watchedNodeIds);
   const observationId = randomUUID();
 
   try {
@@ -312,7 +314,7 @@ async function runCycle(supabase: SupabaseClient): Promise<void> {
       return;
     }
 
-    const fingerprintMid = await gridFingerprint(supabase);
+    const fingerprintMid = await gridFingerprint(supabase, watchedNodeIds);
     if (fingerprintMid !== fingerprintAtStart) {
       await logEvent(supabase, "stale", "grid state changed during reasoning", detection.nodeId);
       return;

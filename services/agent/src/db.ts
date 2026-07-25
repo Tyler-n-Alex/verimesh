@@ -55,10 +55,15 @@ export async function loadGridState(supabase: SupabaseClient): Promise<GridState
   };
 }
 
-export async function gridFingerprint(supabase: SupabaseClient): Promise<string> {
-  const { data, error } = await supabase
-    .from("nodes")
-    .select("id,status,metrics,updated_at");
+export async function gridFingerprint(
+  supabase: SupabaseClient,
+  nodeIds?: string[]
+): Promise<string> {
+  let query = supabase.from("nodes").select("id,status,metrics,updated_at");
+  if (nodeIds && nodeIds.length > 0) {
+    query = query.in("id", nodeIds);
+  }
+  const { data, error } = await query;
   if (error) throw error;
 
   const rows = (data ?? []) as DbNode[];
@@ -69,6 +74,13 @@ export async function gridFingerprint(supabase: SupabaseClient): Promise<string>
         `${n.id}:${n.status}:${n.metrics.ts}:${n.metrics.temp}:${n.metrics.throughput}:${n.updated_at}`
     )
     .join("|");
+}
+
+export function relevantNodeIds(state: GridState, nodeId: string): string[] {
+  const neighbors = state.edges
+    .filter((e) => e.from === nodeId || e.to === nodeId)
+    .map((e) => (e.from === nodeId ? e.to : e.from));
+  return Array.from(new Set([nodeId, ...neighbors]));
 }
 
 export async function fetchTelemetryWindow(

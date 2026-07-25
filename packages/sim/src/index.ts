@@ -108,6 +108,8 @@ async function persistState(
   const ts = Date.now();
   const updates = state.nodes.map((node) => ({
     id: node.id,
+    name: node.name,
+    operator_id: node.operator,
     status: node.status,
     metrics: node.metrics,
     updated_at: new Date(ts).toISOString(),
