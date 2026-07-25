@@ -77,6 +77,39 @@ export type VerifyConstraints = (
   action: Proposal
 ) => VerdictResult;
 
+export type AuthTier = "T0_AUTONOMOUS" | "T1_SINGLE" | "T2_QUORUM";
+
+export const AUTH_TIER_CODE: Record<AuthTier, number> = {
+  T0_AUTONOMOUS: 0,
+  T1_SINGLE: 1,
+  T2_QUORUM: 2,
+};
+
+export interface AuthorizationRequirement {
+  tier: AuthTier;
+  quorum: number;
+  operatorsRequired: string[];
+  reason: string;
+}
+
+export interface HumanApproval {
+  nullifier: string;
+  operator: string;
+  chosenAction: string;
+  ts: number;
+}
+
+export interface AuthzConfig {
+  operators: Record<string, string[]>;
+  budgetPerWindow: number;
+  windowMs: number;
+}
+
+export interface AuthzContext {
+  incidentCount: number;
+  overrideCounts: Record<string, number>;
+}
+
 export interface DecisionRecord {
   id: string;
   nodeId: string;
@@ -84,7 +117,8 @@ export interface DecisionRecord {
   action: string;
   verdict: string;
   humanAuthorized: boolean;
-  worldIdNullifier?: string;
+  authTier: AuthTier;
+  approvals: HumanApproval[];
   zerogRoot?: string;
   chainTxHash?: string;
   ts: number;

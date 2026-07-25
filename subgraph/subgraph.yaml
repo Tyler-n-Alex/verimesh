@@ -16,15 +16,21 @@ dataSources:
       entities:
         - Decision
         - Freeze
+        - Approval
         - Override
+        - HumanAuthority
+        - NodeHistory
+        - Operator
       abis:
         - name: VerimeshRegistry
           file: ./abis/VerimeshRegistry.json
       eventHandlers:
-        - event: Committed(indexed bytes32,string,string,string,string,bytes32,uint256)
+        - event: Committed(indexed bytes32,string,string,string,string,uint8,bytes32,uint256)
           handler: handleCommitted
-        - event: Frozen(indexed bytes32,string,string,string,uint256)
+        - event: Frozen(indexed bytes32,string,string,string,uint8,uint8,uint256)
           handler: handleFrozen
-        - event: HumanOverride(indexed bytes32,bytes32,string)
-          handler: handleHumanOverride
+        - event: HumanApproval(indexed bytes32,bytes32,string,uint8,uint256)
+          handler: handleHumanApproval
+        - event: OverrideResolved(indexed bytes32,string,uint8,uint256)
+          handler: handleOverrideResolved
       file: ./src/mappings.ts

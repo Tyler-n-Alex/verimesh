@@ -12,8 +12,11 @@ Order below is the order to do it in. B2 starts early and runs in parallel with 
 
 ## Sat 13:30 → 15:00 · make the loop have something to loop over
 
-- [ ] **B0** Seed Supabase from `genio_blueprint.json` — nodes + edges, two operators (`opA`, `opB`)
-      · 30m · needs: H0.5 · unblocks: A1, B1
+- [ ] **B0** ⚡ **DO THIS FIRST — A is waiting on it and nothing else you own is blocking.**
+      Apply `supabase/migrations/0001_init.sql` then `0002_authz.sql`, then
+      `pnpm --filter @verimesh/agent seed`. The script is already written; it upserts 16 nodes,
+      25 edges and a first telemetry row. ~10m including the migrations · needs: H0.7
+      · **unblocks: A1, A1.5, A2.*, A4.* (≈7h of A's work)**
 - [ ] **B1** Simulator tick → `telemetry` + `nodes.metrics` writes on an interval; fault injection
       hook for scenarios · 60m · needs: B0 · unblocks: A2, C1
 

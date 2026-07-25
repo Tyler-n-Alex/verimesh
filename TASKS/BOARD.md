@@ -177,25 +177,48 @@ with sleep in it. Move the owner tags in the stream files when you agree the swa
 
 ## G1 · Contract freeze — the blocking shared task
 
-All three of you, **right now**, together, ~45m. Nothing else starts until `pnpm typecheck` is green.
+**The code freeze is DONE and pushed (13:45).** What remains is environment setup, which each of
+you does on your own machine.
 
-- [ ] **H0.1** `packages/shared/src/types.ts` — add ✦ `AuthTier`, `AuthorizationRequirement`,
-      `HumanApproval`; add `authTier` + `approvals[]` to `DecisionRecord` (plan §6.1) · 15m · owner: C
-- [ ] **H0.2** `contracts/VerimeshRegistry.sol` — replace the 3-event set with the ✦ set:
-      `Committed`(+`authTier`), `Frozen`(+`requiredTier`,`requiredQuorum`), `HumanApproval`(per signer),
-      `OverrideResolved`; `resolveOverride` **reverts on a duplicate nullifier** (plan §6.2) · 20m · owner: B
-- [ ] **H0.3** `subgraph/schema.graphql` — add `authTier` to `Decision`; add `Approval`,
-      `HumanAuthority`, `Operator`, `NodeHistory` (plan §6.3) · 15m · owner: B
-- [ ] **H0.4** `packages/shared/src/authz_config.json` — `{ operators: { opA: [], opB: [] }, budgetPerWindow: N }`,
-      nullifiers filled in after enrolment · 5m · owner: C
-- [ ] **H0.5** `supabase/migrations/0002_authz.sql` — `commits.chain_tx_hash`,
-      `human_gates.required_tier`, `human_gates.required_quorum`, `human_approvals` table · 15m · owner: B
-- [ ] **H0.6** `authz.ts` **signature** agreed and stubbed (not implemented) — everyone codes against
-      it from here · 10m · owner: C
+- [x] **H0.1** `packages/shared/src/types.ts` — ✦ `AuthTier`, `AUTH_TIER_CODE`,
+      `AuthorizationRequirement`, `HumanApproval`, `AuthzConfig`, `AuthzContext`; `DecisionRecord`
+      now carries `authTier` + `approvals[]` (plan §6.1) · done 13:45
+- [x] **H0.1b** `packages/shared/src/nullifier.ts` — **the canonical nullifier form**:
+      lowercase `0x`, zero-padded to 32 bytes, decimal auto-converted. `normalizeNullifier`,
+      `sameHuman`, `distinctNullifiers`, `hasDistinctQuorum`. **Everyone uses this — never compare
+      raw nullifier strings.** Hex maps straight to the contract's `bytes32`, so there is no
+      conversion at the chain boundary, which is where a mismatch would silently break T2 · done 13:45
+- [x] **H0.2** `contracts/VerimeshRegistry.sol` — ✦ event set; `resolveOverride` takes the collected
+      nullifiers + operators, **reverts `DuplicateNullifier`**, is idempotent
+      (`OverrideAlreadyResolved`), emits one `HumanApproval` per signer then `OverrideResolved`
+      (plan §6.2) · done 13:45
+- [x] **H0.3** `subgraph/schema.graphql` — `Decision`(+`authTier`), `Freeze`, `Approval`, `Override`,
+      `HumanAuthority`, `NodeHistory`, `Operator`; `subgraph.yaml` event signatures updated to match
+      the new ABI (plan §6.3) · done 13:45
+- [x] **H0.4** `packages/shared/src/authz_config.json` — **opA, opB *and opC*** (the blueprint has
+      three operators, not two); `budgetPerWindow: 3`, `windowMs: 3600000`. Nullifier arrays are
+      empty until enrolment (`B5.6`) · done 13:45
+- [x] **H0.5** `supabase/migrations/0002_authz.sql` — `human_gates.required_tier/required_quorum/
+      operators_required/reason/resolved_tx_hash`, `human_approvals` table with a **unique index on
+      `(gate_id, nullifier)`**, `proposals.auth_tier`, `commits.auth_tier/human_authorized`.
+      (`commits.chain_tx_hash` already existed in `0001`.) · done 13:45
+- [x] **H0.6** `packages/shared/src/authz.ts` — signatures frozen and stubbed: `requireAuthorization`,
+      `checkApproval` (returns a typed `ApprovalRejection`), `isSatisfied`. They throw until C
+      implements them in `C3.*` · done 13:45
+- [x] **B0a** `services/agent/src/seed.ts` + `pnpm --filter @verimesh/agent seed` — upserts the
+      blueprint's 16 nodes, 25 edges and a first telemetry row · done 13:45 · **run it to unblock A**
 - [ ] **H0.7** Fill in the Owners table above; everyone `.env` populated, `pnpm install`,
       `pnpm typecheck` green · 10m · owner: all
-- [ ] **H0.8** Commit `docs/IMPLEMENTATION_PLAN_THEGRAPH.md` (currently modified locally — teammates
-      can't see the ✦ revision) and push · 2m · owner: whoever holds the edit
+- [ ] **H0.8** Commit `docs/IMPLEMENTATION_PLAN_THEGRAPH.md` (still modified locally — teammates
+      can't see the ✦ revision) with a header noting corrections 1–3 above supersede it
+      · 2m · owner: whoever holds the edit
+
+### Distinctness is now enforced in three places
+
+A repeat nullifier is rejected by `authz.checkApproval` (app), by the unique index on
+`human_approvals` (database), and by `revert DuplicateNullifier` (chain). Do not remove any of
+them — the whole World differentiator is that "two different humans" cannot be faked, and a single
+check is a single point of failure.
 
 ---
 

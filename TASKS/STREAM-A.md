@@ -10,9 +10,23 @@ Skills: [`world-id`](../.claude/skills/world-id/SKILL.md) · [`subgraph`](../.cl
 `apps/web/` is **empty**. You are building from zero, and you also picked up **B4** and **B5.1** in
 the G1 rebalance (both are Next.js API routes that belong in your app anyway).
 
-**Your hard dependency is `SUBGRAPH_URL` (B2.6).** Do not sit and wait for it — build A3.5 and A5
-against a hand-written fixture matching `subgraph/schema.graphql`, and swap the endpoint in when B
-publishes it. Ask B for the fixture at 15:00 if the spike is still running.
+## ✅ You are unblocked — start now
+
+H0 is frozen and pushed. `pnpm install`, then **A0 needs nothing from anyone** — start it this
+minute. Everything through **A4.2 is B-independent** once B runs the seed
+(`pnpm --filter @verimesh/agent seed`, ~2 min). That is **~7 hours of runway** with no further
+dependency on B.
+
+Import types from `@verimesh/shared` — they are final. `AuthTier`, `AuthorizationRequirement`,
+`HumanApproval` and `DecisionRecord` are what the quorum modal and audit drawer render.
+
+**Never compare nullifier strings directly.** Use `sameHuman` / `distinctNullifiers` from
+`@verimesh/shared`. The same human's nullifier arrives in different representations from the widget,
+the database and the chain; raw `===` will show one person as two and silently fake a T2 quorum.
+
+**Your only real blocker is `SUBGRAPH_URL` (B2.6), and it does not bite until A3.5 at ~20:00.**
+Do not wait on it — build A3.5 and A5 against a fixture matching `subgraph/schema.graphql` and swap
+the endpoint in later. Ask B for a fixture at 15:00 if the spike is still running.
 
 ---
 

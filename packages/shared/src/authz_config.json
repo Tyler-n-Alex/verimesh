@@ -1,0 +1,9 @@
+{
+  "operators": {
+    "opA": [],
+    "opB": [],
+    "opC": []
+  },
+  "budgetPerWindow": 3,
+  "windowMs": 3600000
+}

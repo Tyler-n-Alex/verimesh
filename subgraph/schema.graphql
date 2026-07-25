@@ -4,6 +4,8 @@ type Decision @entity(immutable: true) {
   operator: String!
   action: String!
   verdict: String!
+  authTier: Int!
+  humanAuthorized: Boolean!
   zerogRoot: Bytes
   ts: BigInt!
   txHash: Bytes!
@@ -11,17 +13,55 @@ type Decision @entity(immutable: true) {
 
 type Freeze @entity(immutable: true) {
   id: ID!
+  decisionId: Bytes!
   nodeId: String!
   operator: String!
   reason: String!
+  requiredTier: Int!
+  requiredQuorum: Int!
+  ts: BigInt!
+  txHash: Bytes!
+}
+
+type Approval @entity(immutable: true) {
+  id: ID!
+  decisionId: Bytes!
+  worldIdNullifier: Bytes!
+  operator: String!
+  approvalIndex: Int!
   ts: BigInt!
   txHash: Bytes!
 }
 
 type Override @entity(immutable: true) {
   id: ID!
-  worldIdNullifier: Bytes!
+  decisionId: Bytes!
   chosenAction: String!
+  approvalsCollected: Int!
   ts: BigInt!
   txHash: Bytes!
+}
+
+type HumanAuthority @entity(immutable: false) {
+  id: ID!
+  worldIdNullifier: Bytes!
+  overrideCount: Int!
+  lastOverrideTs: BigInt!
+  operators: [String!]!
+}
+
+type NodeHistory @entity(immutable: false) {
+  id: ID!
+  nodeId: String!
+  operator: String!
+  incidentCount: Int!
+  violationCount: Int!
+  lastIncidentTs: BigInt!
+}
+
+type Operator @entity(immutable: false) {
+  id: ID!
+  decisionCount: Int!
+  freezeCount: Int!
+  lastDecisionTs: BigInt!
 }
