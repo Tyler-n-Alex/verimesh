@@ -7,6 +7,7 @@ import {
   type HumanApproval,
 } from "@verimesh/shared";
 import {
+  authorizationTraceCheck,
   quorumTruthCheck,
   runAcceptance,
   subgraphTruthCheck,
@@ -61,6 +62,7 @@ const gate: ResolvedGate = {
   chosenAction: "SCALE_UP",
   requirement,
   approvals,
+  requirementSource: "gate-record",
 };
 
 interface StubRows {
@@ -73,6 +75,17 @@ function stub(rows: StubRows): GraphQLFetch {
   return async (query) => {
     if (query.includes("DecisionTruth")) {
       return { decisions: rows.decisions ?? [] };
+    }
+    if (query.includes("AuthorizedDecisions")) {
+      return {
+        decisions: (rows.decisions ?? []).filter(
+          (d) => (d as { humanAuthorized?: boolean }).humanAuthorized
+        ),
+        approvals: (rows.approvals ?? []).map((a) => ({
+          ...(a as object),
+          decisionId: DECISION_ID,
+        })),
+      };
     }
     return {
       approvals: rows.approvals ?? [],
@@ -249,7 +262,7 @@ describe("C5.3 · the harness verdict", () => {
       })
     );
     expect(green.ok).toBe(true);
-    expect(green.results).toHaveLength(2);
+    expect(green.results).toHaveLength(3);
 
     const red = await runAcceptance(
       { decisions: [committed], gates: [gate] },
@@ -268,6 +281,51 @@ describe("C5.3 · the harness verdict", () => {
       failing
     );
     expect(report.ok).toBe(false);
-    expect(report.red).toHaveLength(2);
+    expect(report.red).toHaveLength(3);
+  });
+});
+
+describe("C5.2 · the requirement's provenance is part of the result", () => {
+  it("says so when operatorsRequired was reconstructed rather than read from the gate record", async () => {
+    const [result] = await quorumTruthCheck(
+      [{ ...gate, requirementSource: "chain-derived" }],
+      stub({ approvals: indexedApprovals, overrides: [indexedOverride] })
+    );
+    expect(result.ok).toBe(false);
+    expect(result.mismatches.join(" ")).toContain("not independently checked");
+  });
+});
+
+describe("C5.2 · authorization-trace check", () => {
+  it("catches a decision that claims a human authorized it with no approvals on-chain", async () => {
+    const orphanFetch: GraphQLFetch = async (query) => {
+      if (query.includes("AuthorizedDecisions")) {
+        return {
+          decisions: [
+            { id: DECISION_ID, nodeId: "node-07", authTier: 2 },
+          ],
+          approvals: [],
+        };
+      }
+      return {};
+    };
+    const [result] = await authorizationTraceCheck(orphanFetch);
+    expect(result.ok).toBe(false);
+    expect(result.detail).toContain("resolveOverride was never called");
+    expect(result.mismatches[0]).toContain("node-07");
+  });
+
+  it("passes when every human-authorized decision has its approvals indexed", async () => {
+    const goodFetch: GraphQLFetch = async (query) => {
+      if (query.includes("AuthorizedDecisions")) {
+        return {
+          decisions: [{ id: DECISION_ID, nodeId: "node-07", authTier: 2 }],
+          approvals: [{ decisionId: DECISION_ID.toUpperCase() }],
+        };
+      }
+      return {};
+    };
+    const [result] = await authorizationTraceCheck(goodFetch);
+    expect(result.ok).toBe(true);
   });
 });

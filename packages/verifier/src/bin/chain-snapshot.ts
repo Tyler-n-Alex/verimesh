@@ -1,4 +1,5 @@
 import { writeFileSync } from "node:fs";
+import { createClient } from "@supabase/supabase-js";
 import { ethers } from "ethers";
 import {
   AUTH_TIER_CODE,
@@ -8,6 +9,36 @@ import {
   type HumanApproval,
 } from "@verimesh/shared";
 import type { AcceptanceInput, ResolvedGate } from "../acceptance";
+
+interface GateRecord {
+  proposal_id: number;
+  required_tier: string;
+  required_quorum: number;
+  operators_required: string[] | null;
+  reason: string | null;
+}
+
+async function gateRecordsByChainId(): Promise<Map<string, GateRecord>> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_KEY;
+  const out = new Map<string, GateRecord>();
+  if (!url || !key) return out;
+
+  const supabase = createClient(url, key, { auth: { persistSession: false } });
+  const { data, error } = await supabase
+    .from("human_gates")
+    .select("proposal_id,required_tier,required_quorum,operators_required,reason");
+
+  if (error) {
+    console.warn(`could not read human_gates: ${error.message}`);
+    return out;
+  }
+
+  for (const row of (data ?? []) as GateRecord[]) {
+    out.set(ethers.id(`proposal-${row.proposal_id}`).toLowerCase(), row);
+  }
+  return out;
+}
 
 const RPC_MAX_BLOCK_RANGE = 1900;
 
@@ -64,6 +95,8 @@ async function main(): Promise<void> {
   const registry = new ethers.Contract(address, EVENT_ABI, provider);
   const head = await provider.getBlockNumber();
 
+  const gateRecords = await gateRecordsByChainId();
+
   const committed = await collect(registry, "Committed", startBlock, head);
   const frozen = await collect(registry, "Frozen", startBlock, head);
   const approved = await collect(registry, "HumanApproval", startBlock, head);
@@ -95,18 +128,27 @@ async function main(): Promise<void> {
         ts: Number(a.args.ts),
       }));
 
-    const operatorsRequired = Array.from(
-      new Set(approvals.map((a) => a.operator))
-    ).sort();
+    const record = gateRecords.get(id.toLowerCase());
+
+    const operatorsRequired = record?.operators_required?.length
+      ? [...record.operators_required].sort()
+      : Array.from(new Set(approvals.map((a) => a.operator))).sort();
 
     return {
       decisionId: id,
       chosenAction: log.args.chosenAction as string,
+      requirementSource: record ? "gate-record" : "chain-derived",
       requirement: {
-        tier: tierFromCode(Number(freeze?.args.requiredTier ?? 0)),
-        quorum: Number(freeze?.args.requiredQuorum ?? approvals.length),
+        tier: (record?.required_tier as ResolvedGate["requirement"]["tier"]) ??
+          tierFromCode(Number(freeze?.args.requiredTier ?? 0)),
+        quorum:
+          record?.required_quorum ??
+          Number(freeze?.args.requiredQuorum ?? approvals.length),
         operatorsRequired,
-        reason: (freeze?.args.reason as string) ?? "no Frozen event indexed for this gate",
+        reason:
+          record?.reason ??
+          (freeze?.args.reason as string) ??
+          "no Frozen event indexed for this gate",
       },
       approvals,
     };
@@ -119,8 +161,9 @@ async function main(): Promise<void> {
     `${decisions.length} decision(s), ${gates.length} resolved gate(s), ${approved.length} approval(s) read straight from ${address} between ${startBlock} and ${head}`
   );
   console.log(`wrote ${out}`);
+  const fromRecords = gates.filter((g) => g.requirementSource === "gate-record").length;
   console.log(
-    `note: requirement.tier and requirement.quorum come from the Frozen event, but the contract does not emit operatorsRequired — that field is reconstructed from the approvals and is therefore NOT independently checked by C5.2`
+    `${fromRecords}/${gates.length} gate requirement(s) came from human_gates — those are independently checked. The rest were reconstructed from the chain, where the Frozen event carries requiredTier and requiredQuorum but not operatorsRequired.`
   );
 }
 

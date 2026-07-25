@@ -16,6 +16,7 @@
     "snapshot": "tsx --env-file=../../.env.local src/bin/chain-snapshot.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.110.8",
     "@verimesh/shared": "workspace:*"
   },
   "devDependencies": {

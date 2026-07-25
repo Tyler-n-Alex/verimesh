@@ -32,6 +32,7 @@ export interface ResolvedGate {
   chosenAction: string;
   requirement: AuthorizationRequirement;
   approvals: HumanApproval[];
+  requirementSource?: "gate-record" | "chain-derived";
 }
 
 export interface AcceptanceInput {
@@ -322,6 +323,12 @@ export async function quorumTruthCheck(
       }
     }
 
+    if (gate.requirementSource !== "gate-record") {
+      mismatches.push(
+        "requirement was reconstructed from the chain, so operatorsRequired is not independently checked — feed the harness from human_gates to close this"
+      );
+    }
+
     const override = overrides[0];
     if (!override) {
       mismatches.push("no OverrideResolved event was indexed for this gate");
@@ -355,6 +362,74 @@ export async function quorumTruthCheck(
   return results;
 }
 
+export const AUTHORIZED_DECISIONS_QUERY = `
+query AuthorizedDecisions($first: Int = 100) {
+  decisions(where: { humanAuthorized: true }, first: $first) {
+    id
+    nodeId
+    operator
+    action
+    authTier
+    ts
+  }
+  approvals(first: 500) {
+    decisionId
+    worldIdNullifier
+    operator
+  }
+}
+`;
+
+export async function authorizationTraceCheck(
+  fetchGql: GraphQLFetch
+): Promise<CheckResult[]> {
+  let decisions: { id: string; nodeId: string; authTier: number }[] = [];
+  let approvals: { decisionId: string }[] = [];
+
+  try {
+    const data = (await fetchGql(AUTHORIZED_DECISIONS_QUERY, {})) as {
+      decisions?: { id: string; nodeId: string; authTier: number }[];
+      approvals?: { decisionId: string }[];
+    };
+    decisions = data.decisions ?? [];
+    approvals = data.approvals ?? [];
+  } catch (err) {
+    return [
+      {
+        check: "C5.2 authorization-trace",
+        subject: "all human-authorized decisions",
+        ok: false,
+        detail: `query failed: ${err instanceof Error ? err.message : String(err)}`,
+        mismatches: [],
+      },
+    ];
+  }
+
+  const approvedIds = new Set(
+    approvals.map((approval) => approval.decisionId.toLowerCase())
+  );
+
+  const orphans = decisions.filter(
+    (decision) => !approvedIds.has(decision.id.toLowerCase())
+  );
+
+  return [
+    {
+      check: "C5.2 authorization-trace",
+      subject: `${decisions.length} human-authorized decision(s)`,
+      ok: orphans.length === 0,
+      detail:
+        orphans.length === 0
+          ? "every decision that claims a human authorized it has HumanApproval events to prove it"
+          : `${orphans.length} decision(s) claim human authorization with no HumanApproval on-chain — resolveOverride was never called for them`,
+      mismatches: orphans.map(
+        (decision) =>
+          `${decision.id} (${decision.nodeId}, tier ${decision.authTier}) has humanAuthorized=true but zero indexed approvals`
+      ),
+    },
+  ];
+}
+
 export async function runAcceptance(
   input: AcceptanceInput,
   fetchGql: GraphQLFetch
@@ -362,6 +437,7 @@ export async function runAcceptance(
   const results = [
     ...(await subgraphTruthCheck(input.decisions, fetchGql)),
     ...(await quorumTruthCheck(input.gates, fetchGql)),
+    ...(await authorizationTraceCheck(fetchGql)),
   ];
   const red = results.filter((result) => !result.ok);
   return { ok: red.length === 0, results, red };

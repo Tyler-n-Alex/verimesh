@@ -11,6 +11,7 @@ generated/
 .env
 .env.*
 !.env.example
+.mcp.json
 .DS_Store
 .turbo/
 chain-snapshot.json
