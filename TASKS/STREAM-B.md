@@ -48,29 +48,22 @@ Order below is the order to do it in. B2 starts early and runs in parallel with 
 
 New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it debugging.
 
-- [ ] **B2.0** Fund a deploy wallet on **Base Sepolia** (`84532`) from a faucet.
-      · **C prepped this 15:20:** the wallet is generated and written to `.env.local`
-      (`node --env-file=.env.local contracts/wallet.mjs`, idempotent — it reports the existing key
-      rather than replacing it). **Address `0x8f071E986582D664E97DDACAE3F14b414322eB0b`, balance 0.**
-      Faucet is the only human step left · **BLOCKED: needs a faucet drip — still 0 ETH as of
-      16:37, faucet claimed in progress** If it stalls, use
-      **Arbitrum Sepolia** (`421614`) instead — identical code, take whichever funds first. Also
-      confirm the exact Graph network slug (`base-sepolia` / `arbitrum-sepolia`) from the
-      supported-networks page with **"Show Testnets"** toggled — a wrong slug fails at deploy · 15m
-- [ ] **B2.1** Hardhat (or Foundry) project in `contracts/`; deploy `VerimeshRegistry` to
+- [x] **B2.0** Fund a deploy wallet on **Base Sepolia** (`84532`) from a faucet.
+      **Address `0x8f071E986582D664E97DDACAE3F14b414322eB0b`.** · done 16:44 · funded 0.09 ETH via
+      faucet drip · 15m
+- [x] **B2.1** Hardhat (or Foundry) project in `contracts/`; deploy `VerimeshRegistry` to
       **Base Sepolia** (⚠️ **not 0G Chain** — see BOARD correction #2); record `REGISTRY_ADDRESS`
-      **and the deployment block number** in `.env.example` · 45m · needs: H0.2, B2.0
-      · **C prepped this 15:20:** `contracts/deploy.mjs` — solc + ethers, no framework (Path A of the
-      `base` skill). It compiles (verified), deploys, then **writes the ABI to `subgraph/abis/`,
-      patches `subgraph.yaml` with the address *and* `startBlock`, and patches `.env.local`** — so
-      the handoff C needs cannot be forgotten. One command:
-      `node --env-file=.env.local contracts/deploy.mjs`
-      · **BLOCKED: the deploy wallet has no balance**
-- [ ] **B2.2** Script emits one `Committed` event; confirm the tx on Basescan · 15m · needs: B2.1
-      · **C prepped this 15:20:** `contracts/seed-event.mjs` emits `Committed` **and** a
-      `Frozen` + `resolveOverride` pair with two distinct nullifiers, so B2.4 can prove all four
-      handlers index — not just one. `node --env-file=.env.local contracts/seed-event.mjs`
-      · **BLOCKED: needs B2.1**
+      **and the deployment block number** in `.env.example` · 45m · needs: H0.2, B2.0 · done 16:45
+      · `node --env-file=.env.local contracts/deploy.mjs` ·
+      **`REGISTRY_ADDRESS=0x0Fb557580E7C01Aed5D02622558216B9eb19c33c`, deploy block `44613204`**,
+      tx <https://sepolia.basescan.org/tx/0x7aff2708dfdff965ca76bbbfe1b69e0c1669414abb5eed68d050a35f50df6f92>.
+      Recorded in `.env.example`; `subgraph.yaml` and `.env.local` patched automatically by the script.
+- [x] **B2.2** Script emits one `Committed` event; confirm the tx on Basescan · 15m · needs: B2.1
+      · done 16:46 · `node --env-file=.env.local contracts/seed-event.mjs` ·
+      Committed <https://sepolia.basescan.org/tx/0x996e2a123b671dd2959d837c632f99eb4dae9b455340e71c83b3735b3b9f8614>,
+      Frozen <https://sepolia.basescan.org/tx/0xa3d460a867fae16bd4e254b7605f93986103f70f4fb673f594b0b614943efc50>,
+      Resolved <https://sepolia.basescan.org/tx/0x521e35264beb21d99430b03a862f5a43f47d0b17210c70e4895dd8e4f0d0250c>
+      · **B2.4 is now unblocked — the registry has a real address and all four event types are on-chain**
 - [x] **B2.3** Subgraph: `subgraph.yaml` pointed at the deployed address + AssemblyScript mappings
       for all four events · 60m · needs: H0.3, B2.1 · **owner: C** (G1 rebalance) · **done 14:40**
       · all four handlers plus the three accumulators — `NodeHistory.incidentCount` feeds C's

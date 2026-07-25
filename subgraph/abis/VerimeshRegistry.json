@@ -1,15 +1,109 @@
 [
   {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "nullifiers",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "operators",
+        "type": "uint256"
+      }
+    ],
+    "name": "ApprovalLengthMismatch",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "id",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "worldIdNullifier",
+        "type": "bytes32"
+      }
+    ],
+    "name": "DuplicateNullifier",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "id",
+        "type": "bytes32"
+      }
+    ],
+    "name": "NoApprovals",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "id",
+        "type": "bytes32"
+      }
+    ],
+    "name": "OverrideAlreadyResolved",
+    "type": "error"
+  },
+  {
     "anonymous": false,
     "inputs": [
-      { "indexed": true, "internalType": "bytes32", "name": "id", "type": "bytes32" },
-      { "indexed": false, "internalType": "string", "name": "nodeId", "type": "string" },
-      { "indexed": false, "internalType": "string", "name": "operator", "type": "string" },
-      { "indexed": false, "internalType": "string", "name": "action", "type": "string" },
-      { "indexed": false, "internalType": "string", "name": "verdict", "type": "string" },
-      { "indexed": false, "internalType": "uint8", "name": "authTier", "type": "uint8" },
-      { "indexed": false, "internalType": "bytes32", "name": "zerogRoot", "type": "bytes32" },
-      { "indexed": false, "internalType": "uint256", "name": "ts", "type": "uint256" }
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "id",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "nodeId",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "operator",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "action",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "verdict",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "authTier",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes32",
+        "name": "zerogRoot",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "ts",
+        "type": "uint256"
+      }
     ],
     "name": "Committed",
     "type": "event"
@@ -17,13 +111,48 @@
   {
     "anonymous": false,
     "inputs": [
-      { "indexed": true, "internalType": "bytes32", "name": "id", "type": "bytes32" },
-      { "indexed": false, "internalType": "string", "name": "nodeId", "type": "string" },
-      { "indexed": false, "internalType": "string", "name": "operator", "type": "string" },
-      { "indexed": false, "internalType": "string", "name": "reason", "type": "string" },
-      { "indexed": false, "internalType": "uint8", "name": "requiredTier", "type": "uint8" },
-      { "indexed": false, "internalType": "uint8", "name": "requiredQuorum", "type": "uint8" },
-      { "indexed": false, "internalType": "uint256", "name": "ts", "type": "uint256" }
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "id",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "nodeId",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "operator",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "reason",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "requiredTier",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "requiredQuorum",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "ts",
+        "type": "uint256"
+      }
     ],
     "name": "Frozen",
     "type": "event"
@@ -31,11 +160,36 @@
   {
     "anonymous": false,
     "inputs": [
-      { "indexed": true, "internalType": "bytes32", "name": "id", "type": "bytes32" },
-      { "indexed": false, "internalType": "bytes32", "name": "worldIdNullifier", "type": "bytes32" },
-      { "indexed": false, "internalType": "string", "name": "operator", "type": "string" },
-      { "indexed": false, "internalType": "uint8", "name": "approvalIndex", "type": "uint8" },
-      { "indexed": false, "internalType": "uint256", "name": "ts", "type": "uint256" }
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "id",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes32",
+        "name": "worldIdNullifier",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "operator",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "approvalIndex",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "ts",
+        "type": "uint256"
+      }
     ],
     "name": "HumanApproval",
     "type": "event"
@@ -43,49 +197,71 @@
   {
     "anonymous": false,
     "inputs": [
-      { "indexed": true, "internalType": "bytes32", "name": "id", "type": "bytes32" },
-      { "indexed": false, "internalType": "string", "name": "chosenAction", "type": "string" },
-      { "indexed": false, "internalType": "uint8", "name": "approvalsCollected", "type": "uint8" },
-      { "indexed": false, "internalType": "uint256", "name": "ts", "type": "uint256" }
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "id",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "chosenAction",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "approvalsCollected",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "ts",
+        "type": "uint256"
+      }
     ],
     "name": "OverrideResolved",
     "type": "event"
   },
   {
     "inputs": [
-      { "internalType": "bytes32", "name": "id", "type": "bytes32" },
-      { "internalType": "bytes32", "name": "worldIdNullifier", "type": "bytes32" }
-    ],
-    "name": "DuplicateNullifier",
-    "type": "error"
-  },
-  {
-    "inputs": [{ "internalType": "bytes32", "name": "id", "type": "bytes32" }],
-    "name": "NoApprovals",
-    "type": "error"
-  },
-  {
-    "inputs": [
-      { "internalType": "uint256", "name": "nullifiers", "type": "uint256" },
-      { "internalType": "uint256", "name": "operators", "type": "uint256" }
-    ],
-    "name": "ApprovalLengthMismatch",
-    "type": "error"
-  },
-  {
-    "inputs": [{ "internalType": "bytes32", "name": "id", "type": "bytes32" }],
-    "name": "OverrideAlreadyResolved",
-    "type": "error"
-  },
-  {
-    "inputs": [
-      { "internalType": "bytes32", "name": "id", "type": "bytes32" },
-      { "internalType": "string", "name": "nodeId", "type": "string" },
-      { "internalType": "string", "name": "operator", "type": "string" },
-      { "internalType": "string", "name": "action", "type": "string" },
-      { "internalType": "string", "name": "verdict", "type": "string" },
-      { "internalType": "uint8", "name": "authTier", "type": "uint8" },
-      { "internalType": "bytes32", "name": "zerogRoot", "type": "bytes32" }
+      {
+        "internalType": "bytes32",
+        "name": "id",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "string",
+        "name": "nodeId",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "operator",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "action",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "verdict",
+        "type": "string"
+      },
+      {
+        "internalType": "uint8",
+        "name": "authTier",
+        "type": "uint8"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "zerogRoot",
+        "type": "bytes32"
+      }
     ],
     "name": "commitDecision",
     "outputs": [],
@@ -94,12 +270,36 @@
   },
   {
     "inputs": [
-      { "internalType": "bytes32", "name": "id", "type": "bytes32" },
-      { "internalType": "string", "name": "nodeId", "type": "string" },
-      { "internalType": "string", "name": "operator", "type": "string" },
-      { "internalType": "string", "name": "reason", "type": "string" },
-      { "internalType": "uint8", "name": "requiredTier", "type": "uint8" },
-      { "internalType": "uint8", "name": "requiredQuorum", "type": "uint8" }
+      {
+        "internalType": "bytes32",
+        "name": "id",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "string",
+        "name": "nodeId",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "operator",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "reason",
+        "type": "string"
+      },
+      {
+        "internalType": "uint8",
+        "name": "requiredTier",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint8",
+        "name": "requiredQuorum",
+        "type": "uint8"
+      }
     ],
     "name": "freezeNode",
     "outputs": [],
@@ -108,10 +308,26 @@
   },
   {
     "inputs": [
-      { "internalType": "bytes32", "name": "id", "type": "bytes32" },
-      { "internalType": "string", "name": "chosenAction", "type": "string" },
-      { "internalType": "bytes32[]", "name": "worldIdNullifiers", "type": "bytes32[]" },
-      { "internalType": "string[]", "name": "operators", "type": "string[]" }
+      {
+        "internalType": "bytes32",
+        "name": "id",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "string",
+        "name": "chosenAction",
+        "type": "string"
+      },
+      {
+        "internalType": "bytes32[]",
+        "name": "worldIdNullifiers",
+        "type": "bytes32[]"
+      },
+      {
+        "internalType": "string[]",
+        "name": "operators",
+        "type": "string[]"
+      }
     ],
     "name": "resolveOverride",
     "outputs": [],
@@ -119,9 +335,21 @@
     "type": "function"
   },
   {
-    "inputs": [{ "internalType": "bytes32", "name": "", "type": "bytes32" }],
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
     "name": "resolved",
-    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
     "stateMutability": "view",
     "type": "function"
   }
