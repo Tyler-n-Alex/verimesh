@@ -6,6 +6,20 @@ Owner: `@____` · Protocol + cut order: [`BOARD.md`](BOARD.md) · Spec: plan §9
 scope. Do the G1 rebalance in `BOARD.md`: **B4 + B5.1 move to A, B2.3 + B2.4 move to C.** They are
 still listed here because they are your dependencies; tick them when the new owner lands them.
 
+> **C, 15:20 — what I picked up and how far it got.** `B2.3` is **done**: mappings, ABI, manifest,
+> `graph codegen && graph build` green. `B2.4` is prepped to one command and **blocked on two human
+> steps only** — a faucet drip and a Studio deploy key (details on the task below).
+>
+> Because `B2.4` needs a deployed registry and `B2.1` had not started, I also **prepped B2.0/B2.1/B2.2**
+> rather than sit blocked: `contracts/wallet.mjs`, `contracts/deploy.mjs`, `contracts/seed-event.mjs`.
+> The deploy script writes the ABI, patches `subgraph.yaml` (address **and** `startBlock`) and
+> patches `.env.local` itself, so the handoff the `base` skill warns about cannot be dropped.
+> **These are still your tasks — I did not deploy anything and I have not touched your loop code.**
+> If you would rather do B2.1 your own way, delete the scripts; nothing else depends on them.
+>
+> Also done and ready to import: `C1` (verifier), `C2` (scenarios), `C3` (authz policy), `C4`
+> (property suites). See the bottom of `STREAM-C.md` for the exact call shapes.
+
 Order below is the order to do it in. B2 starts early and runs in parallel with everything.
 
 ---
@@ -24,20 +38,47 @@ Order below is the order to do it in. B2 starts early and runs in parallel with 
 
 New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it debugging.
 
-- [ ] **B2.0** Fund a deploy wallet on **Base Sepolia** (`84532`) from a faucet. If it stalls, use
+- [ ] **B2.0** Fund a deploy wallet on **Base Sepolia** (`84532`) from a faucet.
+      · **C prepped this 15:20:** the wallet is generated and written to `.env.local`
+      (`node --env-file=.env.local contracts/wallet.mjs`, idempotent — it reports the existing key
+      rather than replacing it). **Address `0x8f071E986582D664E97DDACAE3F14b414322eB0b`, balance 0.**
+      Faucet is the only human step left · **BLOCKED: needs a faucet drip** If it stalls, use
       **Arbitrum Sepolia** (`421614`) instead — identical code, take whichever funds first. Also
       confirm the exact Graph network slug (`base-sepolia` / `arbitrum-sepolia`) from the
       supported-networks page with **"Show Testnets"** toggled — a wrong slug fails at deploy · 15m
 - [ ] **B2.1** Hardhat (or Foundry) project in `contracts/`; deploy `VerimeshRegistry` to
       **Base Sepolia** (⚠️ **not 0G Chain** — see BOARD correction #2); record `REGISTRY_ADDRESS`
       **and the deployment block number** in `.env.example` · 45m · needs: H0.2, B2.0
+      · **C prepped this 15:20:** `contracts/deploy.mjs` — solc + ethers, no framework (Path A of the
+      `base` skill). It compiles (verified), deploys, then **writes the ABI to `subgraph/abis/`,
+      patches `subgraph.yaml` with the address *and* `startBlock`, and patches `.env.local`** — so
+      the handoff C needs cannot be forgotten. One command:
+      `node --env-file=.env.local contracts/deploy.mjs`
+      · **BLOCKED: the deploy wallet has no balance**
 - [ ] **B2.2** Script emits one `Committed` event; confirm the tx on Basescan · 15m · needs: B2.1
-- [ ] **B2.3** Subgraph: `subgraph.yaml` pointed at the deployed address + AssemblyScript mappings
-      for all four events · 60m · needs: H0.3, B2.1 · **owner: C** (G1 rebalance)
+      · **C prepped this 15:20:** `contracts/seed-event.mjs` emits `Committed` **and** a
+      `Frozen` + `resolveOverride` pair with two distinct nullifiers, so B2.4 can prove all four
+      handlers index — not just one. `node --env-file=.env.local contracts/seed-event.mjs`
+      · **BLOCKED: needs B2.1**
+- [x] **B2.3** Subgraph: `subgraph.yaml` pointed at the deployed address + AssemblyScript mappings
+      for all four events · 60m · needs: H0.3, B2.1 · **owner: C** (G1 rebalance) · **done 14:40**
+      · all four handlers plus the three accumulators — `NodeHistory.incidentCount` feeds C's
+      repeat-offender escalation and `HumanAuthority.overrideCount` feeds the per-human budget, so
+      **B5.7's two queries already have entities to read**. ABI hand-written from the `.sol`;
+      `graph codegen && graph build` both pass. Entity-key choices are documented in
+      `subgraph/README.md` · **only `address`/`startBlock` are still placeholders — B2.1 fills them
+      automatically**
 - [ ] **B2.4** Create the subgraph in **Subgraph Studio**, `graph auth <DEPLOY_KEY>`,
       `graph codegen && graph build`, `graph deploy verimesh`. Query the dev URL in GraphiQL and get
       B2.2's seeded event back · 30m · needs: B2.3 · **owner: C** · ⚠️ **feeds G2 at 17:00**
       · ⚠️ **do not run `graph publish`** — publishing is mainnet-only and we do not need it
+      · **C 15:20: everything that can be done without credentials is done.** `npm install` has run
+      in `subgraph/`, `graph codegen` and `graph build` both pass, the WASM compiles.
+      · **BLOCKED on two human steps, in this order:** (1) a faucet drip to
+      `0x8f071E986582D664E97DDACAE3F14b414322eB0b` → B2.1/B2.2 run themselves; (2) create the
+      subgraph at <https://thegraph.com/studio/> (connect wallet → "Create a Subgraph" → slug
+      `verimesh`) and paste the **deploy key** into `SUBGRAPH_DEPLOY_KEY`. Then it is
+      `npx graph auth <key> && npx graph deploy verimesh`, ~10 minutes
 - [ ] **B2.5** ⚠️ **G2 · 17:00 GO/NO-GO.** The subgraph ships either way — this is a *hosting*
       contingency, not a feature cut. If B2.4 is not green:
       1. local `graph-node` via docker-compose against the same RPC — same manifest, same mappings,
@@ -69,7 +110,11 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
 - [ ] **B5.2** Valid proof → record a `HumanApproval` (nullifier + enrolled operator) against the
       open `human_gate` · 45m · needs: B5.1, H0.5
 - [ ] **B5.3** Wire C's `authz.ts` into the freeze branch: verdict + projected blast radius →
-      `AuthorizationRequirement` · 30m · needs: C3
+      `AuthorizationRequirement` · 30m · needs: C3 · **C3 is done — `requireAuthorization(verdict,
+      affectedOperators(verdict), action, authzConfig, { incidentCount, overrideCounts })`.
+      `affectedOperators` comes from `@verimesh/verifier`; do not diff `projected` yourself, the
+      blast radius is only meaningful against the do-nothing counterfactual, which the verifier
+      already computed. `requirement.reason` is written to be shown verbatim in the freeze modal**
 - [ ] **B5.4** **T1 end-to-end** — single human, allowlist checked, gate resolves, commit proceeds
       · 45m · needs: B5.2, B5.3
 - [ ] **B5.5** **T2 quorum** — gate stays open until it holds the required *distinct* nullifiers,
@@ -81,6 +126,9 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
       the subgraph over **plain GraphQL** (not the agent's MCP tool — the one-LLM-decision invariant
       must hold) for: (a) the node's incident count → escalate the tier for a repeat offender,
       (b) each signer's recent override count → enforce `budgetPerWindow` · 60m · needs: B5.5, B2.6, C3
+      · **the entities exist as of B2.3:** `nodeHistories(where: { nodeId: $nodeId }) { incidentCount }`
+      and `humanAuthorities(where: { worldIdNullifier: $n }) { overrideCount }`. Feed them in as the
+      `AuthzContext` — the policy is pure and will not fetch anything itself
 
 ---
 
@@ -93,7 +141,10 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
       unblocked, then B7 swaps the transport underneath · 45m · needs: B2.6 · unblocks: B7
 - [ ] **B6.3** Diagnose + propose — the **one** LLM decision, via B3, telemetry + history in context
       · 45m · needs: B3, B6.2
-- [ ] **B6.4** `verify_constraints` call → C's verifier · 15m · needs: C1
+- [ ] **B6.4** `verify_constraints` call → C's verifier · 15m · needs: C1 · **C1 is done —
+      `verifyConstraints(state, proposal)` from `@verimesh/verifier`. Pure, deterministic, does not
+      mutate the state you hand it. Returns `VerdictResult` plus `violations`, `peak`, `baseline`
+      and `blast`**
 - [ ] **B6.5** `commit_state` — Supabase + 0G Storage blob + **registry `Committed` event** (Base
       Sepolia) carrying `authTier` **and the `zerogRoot` from the 0G Storage write**; store
       `chain_tx_hash`. The `zerogRoot` is what links the indexed row back to 0G — do not drop it
@@ -117,6 +168,11 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
 
 - [ ] **B8.1** Headless scenario runner — `ambiguous_cascade` and `recurring_fault` run start to
       finish with no human at the keyboard except the World ID scans · 60m · needs: C2, B6.6
+      · **C2 is done — `SCENARIOS` / `scenarioById(id)` from `@verimesh/verifier` carry the fault
+      patches, the proposal, the history context and the expected verdict/tier, so you can drive the
+      loop from them instead of hand-injecting. `runAllScenarios()` runs the deterministic half.**
+      ⚠️ the cascade's offline neighbour is **`node-11`**, not node-12 — see the correction in
+      `STREAM-C.md`
 - [ ] **B8.2** Retry/timeout on every network call (0G broker, RPC, subgraph). One flaky call must
       not kill the demo · 45m
 - [ ] **B8.3** Seed a handful of historical decisions on-chain so `get_history` has real depth on

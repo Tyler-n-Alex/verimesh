@@ -13,7 +13,9 @@
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "ethers": "^6.17.0",
     "fast-check": "^4.9.0",
+    "solc": "0.8.28",
     "typescript": "^5.5.4",
     "vitest": "^4.1.10"
   }
