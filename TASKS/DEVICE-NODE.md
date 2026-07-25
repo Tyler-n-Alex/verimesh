@@ -205,16 +205,15 @@ fresh database or after someone re-runs the seed. It is idempotent — running i
    default repo; `heat.js` replaces it (see *Making it fail on cue*).
    If you did install it, `termux-battery-status` must print JSON containing `"temperature"`.
 
-   ### Termux:API is optional — you probably do not need it
-   Only battery temperature, battery percentage and charging state come from Termux:API. Everything
-   else the reporter sends is read straight from the filesystem and needs no add-on at all:
-   CPU load (`/proc/stat`), SoC temperature (`/sys/class/thermal`), memory (`/proc/meminfo`) and the
-   measured work rate.
+   ### Is Termux:API needed?
+   It is the **only** source of battery temperature, battery percentage and charging state. Everything
+   else the reporter sends needs no add-on: CPU load (`/proc/stat`), SoC temperature
+   (`/sys/class/thermal`), memory (`/proc/meminfo`) and the measured work rate.
 
-   Since we are running **off-charger** and therefore using `VERIMESH_TEMP_SOURCE=soc` anyway, the
-   reporter degrades cleanly without it: `batteryStatus()` returns null, battery/charging report as
-   `—`, and temperature falls through to the SoC sensor. **If Termux:API turns into a rabbit hole,
-   skip it and move on.**
+   - **Demoing on charger → install it.** Battery temperature is the sensor you want, and it only
+     exists via Termux:API.
+   - **Demoing off charger → skip it.** The reporter degrades cleanly: `batteryStatus()` returns null,
+     battery and charging read `—`, and temperature falls through to the SoC sensor.
 4. **Stop Android killing it:** Settings → Apps → Termux → Battery → **Unrestricted**, then in the
    Termux session run `termux-wake-lock`.
 5. **Pull the scripts straight off the host** — no cable, no git, no auth. Substitute the host's
@@ -262,27 +261,31 @@ and handles Ctrl-C.
 either entry point works. Short bursts only — phones throttle themselves safely, and we do not need a
 hot phone for long.
 
-### 🔌 No cable also means no charging — so use the SoC sensor
+### 🔌 Which temperature sensor — depends on whether the phone is charging
 
-The original plan assumed the phone was plugged in, because **charging plus CPU load** is what really
-moves *battery* temperature. On battery alone, expect battery temp to climb only a few degrees
-(~29 → 34 °C), which may never reach `T_max 41`.
+**Charging plus CPU load** is what really moves *battery* temperature. Pick accordingly:
 
-The **SoC temperature** has no such problem: it swings from ~40 °C idle to 70 °C+ under load within
-seconds, and it is just as real a sensor. The reporter can use it as the primary metric:
+| Situation | `VERIMESH_TEMP_SOURCE` | Why |
+|---|---|---|
+| **On charger** *(the demo setup)* | **`battery`** (the default) | Charging + load takes battery temp from ~29 °C past 41 °C in about a minute. It is the sensor the plan intended, and "real battery temperature" is the cleanest thing to say out loud. **Requires Termux:API** — it is the only source of battery temp. |
+| Off charger | `soc` | On battery alone, battery temp climbs only a few degrees (~29 → 34 °C) and may never reach `T_max 41`. SoC temp swings ~40 → 70 °C+ within seconds and is just as real a sensor. Needs no add-on. |
+| Unsure / mixed | `max` | Uses whichever of the two is currently higher. |
 
 ```sh
-export VERIMESH_TEMP_SOURCE=soc     # battery (default) | soc | max
+export VERIMESH_TEMP_SOURCE=battery   # battery (default) | soc | max
 ```
 
-`max` uses whichever of the two is currently higher — a good default if you are unsure. Whatever it
-picks is sent as `tempSource`, and the inspector's *Physical device* note **changes its wording to
-name the sensor actually in use** ("the real SoC sensor from `/sys/class/thermal`"), so the narration
-stays truthful either way.
+Whichever it uses is sent as `tempSource`, and the inspector's *Physical device* note **rewords itself
+to name the sensor actually in use**, so the narration stays truthful either way.
 
-Note that `/sys/class/thermal` is not always readable on a non-rooted S22. The reporter probes the
-zones on first tick and prints `soc -` if none are accessible. **Check that line before committing to
-`soc`** — if it is `-`, stay on `battery` and lower the bounds instead.
+⚠️ **On charger, keep bursts to 30–45 s.** Charging plus sustained full-core load heats a phone fast,
+and near ~45 °C Android throttles hard and stops charging — which would stall the very effect you are
+demonstrating. It is also just not good for the battery. Short bursts are enough: `T_max 41` is
+crossed well before that.
+
+Note `/sys/class/thermal` is not always readable on a non-rooted S22. The reporter probes the zones on
+the first tick and prints `soc -` if none are accessible — so if you ever need the `soc` fallback,
+check that line first.
 
 ### Bounds — measure, then set
 
