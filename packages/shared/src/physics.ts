@@ -21,9 +21,12 @@ const nodeParams = new Map<string, BlueprintNode>(
   (blueprint as { nodes: BlueprintNode[] }).nodes.map((n) => [n.id, n])
 );
 
-function throttleFactor(temp: number, tWarn: number): number {
+export const THROTTLE_FLOOR = 0.3;
+export const THROTTLE_SLOPE = 0.03;
+
+export function throttleFactor(temp: number, tWarn: number): number {
   if (temp <= tWarn) return 1;
-  return Math.max(0.3, 1 - (temp - tWarn) * 0.03);
+  return Math.max(THROTTLE_FLOOR, 1 - (temp - tWarn) * THROTTLE_SLOPE);
 }
 
 export function step(state: GridState, controls: StepControls = {}): GridState {

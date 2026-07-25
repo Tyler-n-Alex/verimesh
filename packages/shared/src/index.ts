@@ -1,6 +1,7 @@
 export * from "./types";
 export * from "./schema";
 export * from "./physics";
+export * from "./invariants";
 export * from "./nullifier";
 export * from "./authz";
 export { default as blueprint } from "./genio_blueprint.json";

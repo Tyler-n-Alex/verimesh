@@ -8,9 +8,13 @@
   },
   "scripts": {
     "typecheck": "tsc -b",
-    "clean": "tsc -b --clean"
+    "clean": "tsc -b --clean",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
-    "typescript": "^5.5.4"
+    "fast-check": "^4.9.0",
+    "typescript": "^5.5.4",
+    "vitest": "^4.1.10"
   }
 }
