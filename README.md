@@ -25,7 +25,17 @@ contracts           Solidity decision registry (0G Chain)
 subgraph            The Graph subgraph indexing the registry
 supabase            schema migrations
 docs                planning + spec artifacts
+TASKS               the shared task board — who is doing what, right now
 ```
+
+## Working on this
+
+**Start at [`TASKS/BOARD.md`](TASKS/BOARD.md).** It holds the schedule, the gates, the blockers, and
+the update protocol. Your tasks live in your stream file (`TASKS/STREAM-A.md`, `-B`, `-C`).
+`docs/` is the spec; `TASKS/` is the plan of record — if they disagree, the board wins.
+
+AI coding assistants working in this repo must read `TASKS/BOARD.md` before starting, keep their
+owner's stream file up to date as they work, and push after every status change.
 
 ## Getting started
 

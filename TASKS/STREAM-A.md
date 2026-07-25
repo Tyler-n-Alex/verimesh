@@ -1,0 +1,90 @@
+# Stream A — frontend / 3D
+
+Owner: `@____` · Protocol + scope: [`BOARD.md`](BOARD.md) · Spec: plan §8
+
+`apps/web/` is **empty**. You are building from zero, and you also picked up **B4** and **B5.1** in
+the G1 rebalance (both are Next.js API routes that belong in your app anyway).
+
+**Your hard dependency is `SUBGRAPH_URL` (B2.6).** Do not sit and wait for it — build A3.5 and A5
+against a hand-written fixture matching `subgraph/schema.graphql`, and swap the endpoint in when B
+publishes it. Ask B for the fixture at 15:00 if the spike is still running.
+
+---
+
+## Sat 13:30 → 16:00 · shell + live data
+
+- [ ] **A0** `apps/web` — Next.js (app router) + Tailwind + **HeroUI v3**; dark shell, layout
+      regions for mesh / trace / event log / inspector · 60m · needs: H0.7
+- [ ] **A1** Supabase realtime hook — subscribe to `nodes`, `events`, `proposals`, `verdicts`,
+      `human_gates`; render the seeded node list as plain rows first · 45m · needs: B0
+- [ ] **A1.5** zustand store fed by the realtime hook; one shape the 3D and the panels both read
+      · 30m · needs: A1
+
+---
+
+## Sat 16:00 → 19:00 · the 3D mesh (plan §8 A2)
+
+- [ ] **A2.1** R3F scene — camera, controls, node instances positioned from `pos`, edges as lines
+      · 90m · needs: A1.5
+- [ ] **A2.2** Status-driven materials — `healthy` / `warning` / `violation` / `awaiting_human` /
+      `isolated` / `offline`; **operator-distinct colouring** (opA vs opB must be readable at a
+      glance — the cross-operator quorum beat depends on judges seeing the boundary) · 60m · needs: A2.1
+- [ ] **A2.3** Postprocessing + motion — bloom on violation, pulse on `awaiting_human`, edge
+      animation on load transfer · 45m · needs: A2.2
+- [ ] **A2.4** Perf pass — instancing, no per-frame allocation, capped DPR. It must hold 60fps on
+      the demo laptop while the loop is writing · 30m · needs: A2.3
+
+---
+
+## Sat 18:00 → 21:00 · panels (plan §8 A3, A4)
+
+- [ ] **A3.1** Reasoning trace panel — streaming steps: telemetry → detect → **history** → propose →
+      verify → commit/freeze · 60m · needs: A1.5
+- [ ] **A3.2** Event log — `events` table, newest first, colour-coded by type · 30m · needs: A1.5
+- [ ] **A4.1** Node inspector — click a node → metrics, operator, status, recent telemetry sparkline
+      · 45m · needs: A2.1
+- [ ] **A4.2** Action menu — the fixed `ACTIONS` set, manual trigger for rehearsal · 30m · needs: A4.1
+
+---
+
+## Sat 20:00 → 23:00 · The Graph views (plan §8 A3.5, A5) — **the Graph track's UI**
+
+- [ ] **A3.5.1** GraphQL client (plain `fetch` is fine) against `SUBGRAPH_URL` · 20m · needs: B2.6
+- [ ] **A3.5.2** **Per-operator decision history** — query the subgraph by `operator`, filterable by
+      `verdict` · 45m · needs: A3.5.1
+- [ ] **A3.5.3** **Incident timeline** per node · 30m · needs: A3.5.1
+- [ ] **A3.5.4** ◈ **"the agent cited this" panel** — surface the exact `get_history` result the LLM
+      had in context, inline in the trace. Judges must *see* the memory being consulted, not just
+      hear it claimed · 45m · needs: A3.1, B6.2
+- [ ] **A5.1** **Audit drawer** — click any decision → live GraphQL query → the indexed record,
+      the 0G blob, the 0G Chain tx (explorer link), ✦ the distinct signers and the tier · 60m
+      · needs: A3.5.1
+- [ ] **A5.2** Show the raw GraphQL query text in the drawer, copyable — the "any operator can run
+      this exact query" framing only lands if they can see the query · 20m · needs: A5.1
+
+---
+
+## Sat 21:00 → Sun 01:00 · ✦ World ID + the quorum modal (plan §8 A3.6)
+
+- [ ] **B5.1** *(picked up)* `/api/worldid/sign` + `/api/worldid/verify` with `verifyCloudProof`
+      · 45m
+- [ ] **A3.6.1** IDKit widget wired to those routes; one successful scan end-to-end · 45m · needs: B5.1
+- [ ] **A3.6.2** **Freeze modal, T1** — renders the required tier, a single slot, and the
+      operator-allowlist check · 45m · needs: A3.6.1, B5.4
+- [ ] **A3.6.3** **Freeze modal, T2 quorum tracker** — two slots, "Operator A ✅ · Operator B ⬜ —
+      1 of 2 authorized", each filled by a *distinct* scan, and the plain-English reason
+      ("isolating **opA**'s node-07 would breach **opB**'s node-12") · 75m · needs: A3.6.2, B5.5
+      · **this is the money shot — give it real polish**
+- [ ] **A3.6.4** ✦ **Authz ledger** in the audit views, from the subgraph — per decision: which
+      distinct nullifiers signed + the tier; per human: remaining override budget · 45m
+      · needs: A3.5.1, B5.7
+
+---
+
+## Sun 01:00 → 04:00 · 0G + finish
+
+- [ ] **B4** *(picked up)* 0G Storage — write the reasoning blob, store `zerog_root`, link it from
+      the audit drawer · 45m · needs: B3
+- [ ] **A6.1** Empty / loading / error states everywhere. A blank panel during the demo reads as
+      broken · 45m
+- [ ] **A6.2** Full pass on the demo laptop at demo resolution, projector-legible text · 30m
