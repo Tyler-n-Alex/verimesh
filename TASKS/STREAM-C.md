@@ -52,6 +52,12 @@ your own subgraph-truth check.
       · **BLOCKED: needs `REGISTRY_ADDRESS` + the deployment block from B2.1, and a
       `SUBGRAPH_DEPLOY_KEY` from Studio. Everything else is done — `graph codegen && graph build`
       already pass locally, so this is ~10 minutes once those two values exist**
+      · **15:25 — asked and answered: B2.1 stays with B, C does not deploy the registry.** C prepped
+      `contracts/{wallet,deploy,seed-event}.mjs` for B to run (see `STREAM-B.md`) and nothing was
+      deployed. Studio key is coming from the human.
+      · ⚠️ **Do not `graph deploy` before the registry address is real.** A subgraph pointed at
+      `0x000…0` deploys cleanly and indexes nothing — a false green at G2, and you would then debug
+      the mappings, which are fine.
 
 ---
 

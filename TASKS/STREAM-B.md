@@ -17,6 +17,15 @@ still listed here because they are your dependencies; tick them when the new own
 > **These are still your tasks — I did not deploy anything and I have not touched your loop code.**
 > If you would rather do B2.1 your own way, delete the scripts; nothing else depends on them.
 >
+> **Decided 15:25 — C does not deploy. `B2.0`/`B2.1`/`B2.2` are yours to run.** The scripts are a
+> handoff, not a fait accompli: nothing has been deployed and no faucet ETH has been spent.
+>
+> ⚠️ **One thing to check before you fund anything:** `REGISTRY_PRIVATE_KEY` in `.env.local` was
+> empty, so `wallet.mjs` generated a key into it — address
+> `0x8f071E986582D664E97DDACAE3F14b414322eB0b`. **If you already have a wallet you meant to use,
+> overwrite that line first**, or you will fund an address the deploy will not use. `wallet.mjs` is
+> idempotent from here — it reports an existing key and its balance rather than replacing it.
+>
 > Also done and ready to import: `C1` (verifier), `C2` (scenarios), `C3` (authz policy), `C4`
 > (property suites). See the bottom of `STREAM-C.md` for the exact call shapes.
 
@@ -74,11 +83,11 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
       · ⚠️ **do not run `graph publish`** — publishing is mainnet-only and we do not need it
       · **C 15:20: everything that can be done without credentials is done.** `npm install` has run
       in `subgraph/`, `graph codegen` and `graph build` both pass, the WASM compiles.
-      · **BLOCKED on two human steps, in this order:** (1) a faucet drip to
-      `0x8f071E986582D664E97DDACAE3F14b414322eB0b` → B2.1/B2.2 run themselves; (2) create the
-      subgraph at <https://thegraph.com/studio/> (connect wallet → "Create a Subgraph" → slug
-      `verimesh`) and paste the **deploy key** into `SUBGRAPH_DEPLOY_KEY`. Then it is
-      `npx graph auth <key> && npx graph deploy verimesh`, ~10 minutes
+      · **BLOCKED on two steps, in this order:** (1) **B runs B2.1** and publishes the address —
+      decided 15:25, C does not deploy; (2) the **Studio deploy key** into `SUBGRAPH_DEPLOY_KEY`.
+      Then it is `npx graph auth <key> && npx graph deploy verimesh`, ~10 minutes.
+      · ⚠️ **Do not deploy the subgraph before the registry exists.** With `address: 0x000…0` it
+      deploys happily and indexes nothing — which looks like a passing G2 and is not one.
 - [ ] **B2.5** ⚠️ **G2 · 17:00 GO/NO-GO.** The subgraph ships either way — this is a *hosting*
       contingency, not a feature cut. If B2.4 is not green:
       1. local `graph-node` via docker-compose against the same RPC — same manifest, same mappings,
