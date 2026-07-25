@@ -45,7 +45,7 @@ export function WorldIdScan({
   disabled = false,
   onOutcome,
 }: {
-  gateId: number;
+  gateId?: number | null;
   chosenAction?: string;
   label?: string;
   disabled?: boolean;
@@ -91,7 +91,7 @@ export function WorldIdScan({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           rp_id: config?.rp_context?.rp_id,
-          gateId,
+          ...(gateId === undefined || gateId === null ? {} : { gateId }),
           chosenAction,
           idkitResponse: result,
         }),
@@ -153,7 +153,12 @@ export function WorldIdScan({
           action={config.action ?? "verimesh-authorize"}
           rp_context={config.rp_context}
           allow_legacy_proofs
-          preset={orbLegacy({ signal: `gate-${gateId}` })}
+          preset={orbLegacy({
+            signal:
+              gateId === undefined || gateId === null
+                ? "enrolment"
+                : `gate-${gateId}`,
+          })}
           handleVerify={handleVerify}
           onSuccess={() => {
             setOpen(false);

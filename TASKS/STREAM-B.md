@@ -251,8 +251,25 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
       pnpm --filter @verimesh/agent enrol opA 0x…      # phone 1
       pnpm --filter @verimesh/agent enrol opB 0x…      # phone 2 / the World ID Simulator
       ```
-      Get each nullifier by scanning **with no gate open**: `POST /api/worldid/verify` with only
-      `{ idkitResponse }` returns the canonical form and records nothing. The CLI normalises,
+      Get the nullifier at **<http://localhost:3000/enrol>** — a scan surface that authorizes
+      nothing. Before this page there was no way to do it: `WorldIdScan` only ever rendered inside
+      the freeze modal, which always passes a `gateId`, so the "scan with no gate open" instruction
+      had nowhere to happen. The page picks the operator, scans, and prints the nullifier plus the
+      exact `enrol` command with a copy button. `gateId` is now optional on `WorldIdScan` and the
+      signal becomes `enrolment` instead of `gate-N`. **That is safe and it is the whole reason the
+      page works**: the nullifier is derived from (identity, `rp_id`, action) and **not** the
+      signal, so an enrolment scan returns the identical value a gate scan would. Confirmed against
+      the World docs, and against `idkit-core@4.2.2`'s own types.
+      · ⚠️ **A nullifier is bound to `WORLDID_RP_ID` and `WORLDID_ACTION`.** Change either after
+      enrolling and every enrolled value silently stops matching. Do not touch them after B5.6.
+      · **Pre-flighted the verify route as far as is possible without a phone** — B5.1 had never
+      exercised it. Posting a correctly shaped `IDKitResultV4` (real signed nonce from
+      `/api/worldid/sign`, `action: verimesh-authorize`) gets past World's action and nonce checks
+      and fails at *"At least one response item is required"* — so our `rp_id`, our signed
+      `rp_context` and the verbatim forwarding are all accepted by the v4 verifier, and the only
+      missing piece is a real credential response. Also settled a live question: `IDKitResultV4`
+      carries `action` as a **required** field, so forwarding the result untouched is correct —
+      the route does not need to inject it. The CLI normalises,
       refuses a malformed value, warns if one human is enrolled to two operators (they could then
       fill a T2 on their own), and prints that the self-enrolment bypass switches off the moment
       the arrays are non-empty.
