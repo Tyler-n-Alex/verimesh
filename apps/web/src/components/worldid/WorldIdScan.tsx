@@ -1,7 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { IDKitRequestWidget, orbLegacy, type IDKitResult, type RpContext } from "@worldcoin/idkit";
+import {
+  IDKitRequestWidget,
+  orbLegacy,
+  type IDKitResult,
+  type RpContext,
+} from "@worldcoin/idkit";
+import { ACCENT } from "@/lib/palette";
 
 interface SignPayload {
   configured: boolean;
@@ -24,12 +30,18 @@ export interface ScanOutcome {
   satisfied?: boolean;
 }
 
-type Phase = "idle" | "signing" | "ready" | "scanning" | "verifying" | "unavailable";
+type Phase =
+  | "idle"
+  | "signing"
+  | "ready"
+  | "scanning"
+  | "verifying"
+  | "unavailable";
 
 export function WorldIdScan({
   gateId,
   chosenAction,
-  label = "scan to authorize",
+  label = "Scan to authorize",
   disabled = false,
   onOutcome,
 }: {
@@ -59,7 +71,7 @@ export function WorldIdScan({
       const body = (await res.json()) as SignPayload;
       if (!res.ok || !body.rp_context || !body.app_id) {
         setPhase("unavailable");
-        setProblem(body.error ?? `sign route returned HTTP ${res.status}`);
+        setProblem(body.error ?? `Sign route returned HTTP ${res.status}`);
         return;
       }
       setConfig(body);
@@ -76,7 +88,7 @@ export function WorldIdScan({
       setPhase("verifying");
       const res = await fetch("/api/worldid/verify", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           rp_id: config?.rp_context?.rp_id,
           gateId,
@@ -88,7 +100,7 @@ export function WorldIdScan({
       onOutcome?.(outcome);
       if (!res.ok || !outcome.ok) {
         setPhase("ready");
-        setProblem(outcome.error ?? `verification failed (HTTP ${res.status})`);
+        setProblem(outcome.error ?? `Verification failed (HTTP ${res.status})`);
         throw new Error(outcome.error ?? "verification failed");
       }
       setPhase("idle");
@@ -107,32 +119,28 @@ export function WorldIdScan({
   const busy = phase === "signing" || phase === "verifying";
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2">
       <button
         type="button"
         disabled={disabled || busy}
         onClick={() => void start()}
-        className="data flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-[12px] font-semibold tracking-wide transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-        style={{
-          borderColor: "#22d3ee66",
-          background: "#22d3ee18",
-          color: "#22d3ee",
-        }}
+        className="flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        style={{ background: ACCENT }}
       >
         <WorldMark />
         {phase === "signing"
-          ? "minting rp_context…"
+          ? "Requesting signed context…"
           : phase === "verifying"
-            ? "verifying proof…"
+            ? "Verifying proof…"
             : label}
       </button>
 
       {phase === "unavailable" ? (
-        <p className="text-[11px] leading-snug" style={{ color: "#fbbf24" }}>
+        <p className="text-[12px] leading-relaxed" style={{ color: "#c9a13f" }}>
           World ID is not configured: {problem}
         </p>
       ) : problem ? (
-        <p className="text-[11px] leading-snug" style={{ color: "#f43f5e" }}>
+        <p className="text-[12px] leading-relaxed" style={{ color: "#d1524f" }}>
           {problem}
         </p>
       ) : null}
@@ -164,14 +172,14 @@ export function WorldIdScan({
 function WorldMark() {
   return (
     <svg
-      width="13"
-      height="13"
+      width="14"
+      height="14"
       viewBox="0 0 24 24"
       fill="none"
       aria-hidden="true"
     >
-      <circle cx="12" cy="12" r="9.4" stroke="currentColor" strokeWidth="1.9" />
-      <path d="M3 11.2h18" stroke="currentColor" strokeWidth="1.9" />
+      <circle cx="12" cy="12" r="9.2" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M3.2 11h17.6" stroke="currentColor" strokeWidth="1.8" />
     </svg>
   );
 }

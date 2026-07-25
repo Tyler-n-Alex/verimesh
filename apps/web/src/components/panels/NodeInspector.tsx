@@ -3,10 +3,10 @@
 import { useMemo, useState } from "react";
 import { ACTIONS, blueprint, type Action } from "@verimesh/shared";
 import { EmptyState } from "@/components/ui/Panel";
-import { Metric, Pill } from "@/components/ui/Pill";
+import { Metric, OperatorTag, StatusTag } from "@/components/ui/Pill";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { clock, num, pct } from "@/lib/format";
-import { operatorSwatch, statusSwatch } from "@/lib/palette";
+import { NEUTRAL, statusToken } from "@/lib/palette";
 import { useMeshStore } from "@/store/mesh";
 
 interface Bounds {
@@ -49,136 +49,125 @@ export function NodeInspector() {
   if (!selectedNodeId || !node) {
     return (
       <EmptyState
-        title="no node selected"
+        title="No node selected"
         hint="Click a node in the mesh, or a row in the roster."
       />
     );
   }
 
-  const op = operatorSwatch(node.operator);
-  const st = statusSwatch(node.status);
   const bounds = BOUNDS.get(node.id);
   const points = series ?? [];
-  const temps = points.map((p) => p.temp);
-  const loads = points.map((p) => p.load * 100);
-  const throughputs = points.map((p) => p.throughput);
+  const token = statusToken(node.status);
 
-  const tempTone =
-    bounds && node.metrics.temp >= bounds.T_max
-      ? "#f43f5e"
-      : bounds && node.metrics.temp >= bounds.T_warn
-        ? "#fbbf24"
-        : undefined;
-  const loadTone =
-    bounds && node.metrics.load >= bounds.L_max ? "#f43f5e" : undefined;
+  const overTemp = bounds ? node.metrics.temp >= bounds.T_warn : false;
+  const overLoad = bounds ? node.metrics.load >= bounds.L_max : false;
+  const tempTone = overTemp ? token.hex : undefined;
+  const loadTone = overLoad ? token.hex : undefined;
 
   return (
     <div className="flex flex-col">
-      <div className="flex flex-col gap-2 border-b border-hairline bg-abyss px-3 py-2.5">
-        <div className="flex items-center justify-between gap-2">
-          <span className="data text-[16px] leading-none font-bold text-ink">
+      <div className="flex flex-col gap-2.5 border-b border-hairline px-3.5 py-3">
+        <div className="flex items-baseline justify-between gap-2">
+          <h3 className="text-[16px] leading-none font-medium text-ink">
             {node.name}
-          </span>
+          </h3>
           <button
             type="button"
             onClick={() => selectNode(null)}
-            className="data text-[11px] text-ink-faint transition-colors hover:text-ink-dim"
+            className="text-[12px] text-ink-faint transition-colors hover:text-ink-dim"
           >
-            clear
+            Clear
           </button>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Pill color={op.hex} title={op.label}>
-            {node.operator}
-          </Pill>
-          <Pill
-            color={st.hex}
-            pulse={node.status === "violation" || node.status === "awaiting_human"}
-          >
-            {st.label}
-          </Pill>
-          <span className="data text-[10px] text-ink-faint">{node.id}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <OperatorTag operator={node.operator} />
+          <StatusTag status={node.status} attention />
+          <span className="data text-[11.5px] text-ink-faint">{node.id}</span>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-1.5 px-3 py-2.5">
-        <Metric label="load" value={pct(node.metrics.load)} tone={loadTone} />
+      <div className="grid grid-cols-3 gap-x-4 gap-y-3.5 px-3.5 py-3">
+        <Metric label="Load" value={pct(node.metrics.load)} tone={loadTone} />
         <Metric
-          label="temp"
+          label="Temperature"
           value={num(node.metrics.temp)}
           unit="°C"
           tone={tempTone}
         />
-        <Metric label="throughput" value={Math.round(node.metrics.throughput)} unit="r/s" />
-        <Metric label="power" value={Math.round(node.metrics.power)} unit="W" />
-        <Metric label="memory" value={pct(node.metrics.mem)} />
-        <Metric label="fan" value={Math.round(node.metrics.fanRpm)} unit="rpm" />
+        <Metric
+          label="Throughput"
+          value={Math.round(node.metrics.throughput)}
+          unit="r/s"
+        />
+        <Metric label="Power" value={Math.round(node.metrics.power)} unit="W" />
+        <Metric label="Memory" value={pct(node.metrics.mem)} />
+        <Metric label="Fan" value={Math.round(node.metrics.fanRpm)} unit="rpm" />
       </div>
 
-      <div className="flex flex-col gap-2.5 border-t border-hairline px-3 py-2.5">
+      <div className="flex flex-col gap-3 border-t border-hairline px-3.5 py-3">
         <SeriesRow
-          label="temperature"
-          values={temps}
-          color={tempTone ?? "#22d3ee"}
+          label="Temperature"
+          values={points.map((p) => p.temp)}
+          color={tempTone ?? NEUTRAL.dim}
           bound={bounds?.T_max}
           boundLabel={bounds ? `T_max ${bounds.T_max}` : undefined}
-          latest={`${num(node.metrics.temp)}°C`}
+          latest={`${num(node.metrics.temp)} °C`}
         />
         <SeriesRow
-          label="load"
-          values={loads}
-          color={loadTone ?? "#34d399"}
+          label="Load"
+          values={points.map((p) => p.load * 100)}
+          color={loadTone ?? NEUTRAL.dim}
           bound={bounds ? bounds.L_max * 100 : undefined}
-          boundLabel={bounds ? `L_max ${Math.round(bounds.L_max * 100)}%` : undefined}
+          boundLabel={
+            bounds ? `L_max ${Math.round(bounds.L_max * 100)}%` : undefined
+          }
           latest={pct(node.metrics.load)}
         />
         <SeriesRow
-          label="throughput"
-          values={throughputs}
-          color="#a5b4fc"
+          label="Throughput"
+          values={points.map((p) => p.throughput)}
+          color={NEUTRAL.dim}
           latest={`${Math.round(node.metrics.throughput)} r/s`}
         />
-        <span className="data text-[10px] text-ink-faint">
+        <span className="num text-[11.5px] text-ink-faint">
           {points.length} sample{points.length === 1 ? "" : "s"} · last{" "}
           {clock(node.metrics.ts || node.updatedAt)}
         </span>
       </div>
 
-      <div className="flex flex-col gap-1.5 border-t border-hairline px-3 py-2.5">
-        <span className="panel-label text-[9px]">
-          neighbours ({neighbours.length})
-        </span>
+      <div className="flex flex-col gap-2 border-t border-hairline px-3.5 py-3">
+        <h4 className="text-[12px] font-medium text-ink-faint">
+          Neighbours ({neighbours.length})
+        </h4>
         <div className="flex flex-wrap gap-1.5">
-          {neighbours.map((n) => {
-            const nop = operatorSwatch(n.node!.operator);
-            const nst = statusSwatch(n.node!.status);
-            return (
-              <button
-                key={n.id}
-                type="button"
-                onClick={() => selectNode(n.id)}
-                title={
-                  n.cross
-                    ? `cross-operator link — ${node.operator} → ${n.node!.operator}`
-                    : `same-operator link`
-                }
-                className="data flex items-center gap-1.5 rounded-sm border px-1.5 py-1 text-[11px] transition-colors hover:border-hairline-bright"
+          {neighbours.map((n) => (
+            <button
+              key={n.id}
+              type="button"
+              onClick={() => selectNode(n.id)}
+              title={
+                n.cross
+                  ? `Cross-operator link — ${node.operator} to ${n.node!.operator}`
+                  : "Same-operator link"
+              }
+              className="flex items-center gap-1.5 rounded border px-2 py-1 text-[12px] text-ink-dim transition-colors hover:border-hairline-bright hover:text-ink"
+              style={{
+                borderColor: n.cross ? NEUTRAL.lineBright : NEUTRAL.line,
+              }}
+            >
+              <span
+                aria-hidden="true"
+                className="h-2 w-2 rounded-[2px]"
                 style={{
-                  borderColor: n.cross ? `${nop.hex}88` : "#1c2436",
-                  background: n.cross ? `${nop.hex}12` : "transparent",
+                  background: `var(--${n.node!.operator.toLowerCase()}, ${NEUTRAL.faint})`,
                 }}
-              >
-                <span
-                  className="h-1.5 w-1.5 rounded-full"
-                  style={{ background: nst.hex }}
-                />
-                <span style={{ color: nop.hex }}>{n.node!.name}</span>
-                {n.cross ? (
-                  <span className="text-[9px] text-ink-faint">↔</span>
-                ) : null}
-              </button>
-            );
-          })}
+              />
+              {n.node!.name}
+              {n.cross ? (
+                <span className="text-[11px] text-ink-faint">↔</span>
+              ) : null}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -203,10 +192,10 @@ function SeriesRow({
   latest: string;
 }) {
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex flex-col gap-1">
       <div className="flex items-baseline justify-between">
-        <span className="panel-label text-[9px]">{label}</span>
-        <span className="data text-[11px]" style={{ color }}>
+        <span className="text-[11.5px] text-ink-faint">{label}</span>
+        <span className="num text-[12px]" style={{ color }}>
           {latest}
         </span>
       </div>
@@ -265,11 +254,11 @@ function ActionMenu({
   }
 
   return (
-    <div className="flex flex-col gap-2 border-t border-hairline px-3 py-2.5">
-      <div className="flex items-center justify-between gap-2">
-        <span className="panel-label text-[9px]">actions · rehearsal</span>
-        <span className="data text-[9px] text-ink-faint">
-          writes a marked rehearsal row
+    <div className="flex flex-col gap-2.5 border-t border-hairline px-3.5 py-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <h4 className="text-[12px] font-medium text-ink-faint">Actions</h4>
+        <span className="text-[11.5px] text-ink-faint">
+          Rehearsal — writes a marked row
         </span>
       </div>
 
@@ -280,19 +269,21 @@ function ActionMenu({
             type="button"
             disabled={phase === "sending"}
             onClick={() => trigger(action)}
-            className="data rounded-sm border border-hairline bg-abyss px-2 py-1.5 text-left text-[10.5px] tracking-wide text-ink-dim transition-colors hover:border-hairline-bright hover:text-ink disabled:opacity-40"
+            className="rounded border border-hairline px-2.5 py-1.5 text-left text-[12px] text-ink-dim transition-colors hover:border-hairline-bright hover:bg-panel-raised hover:text-ink disabled:opacity-40"
           >
-            {pending === action ? "…" : action}
+            {pending === action ? "Working…" : action}
           </button>
         ))}
       </div>
 
       {detail ? (
         <p
-          className="text-[11px] leading-snug"
-          style={{ color: phase === "error" ? "#f43f5e" : "#34d399" }}
+          className="text-[12px] leading-relaxed"
+          style={{
+            color: phase === "error" ? "#d1524f" : "var(--color-ink-dim)",
+          }}
         >
-          {phase === "error" ? "failed: " : `${nodeName}: `}
+          {phase === "error" ? "Failed: " : `${nodeName}: `}
           {detail}
         </p>
       ) : null}

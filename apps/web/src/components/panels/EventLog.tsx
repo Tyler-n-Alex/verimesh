@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { EmptyState, SkeletonRows } from "@/components/ui/Panel";
-import { eventColor, operatorSwatch } from "@/lib/palette";
 import { clock } from "@/lib/format";
+import { NEUTRAL, SEVERITY_COLORS, eventSeverity } from "@/lib/palette";
 import { useMeshStore } from "@/store/mesh";
 
 export function EventLog() {
@@ -25,7 +25,7 @@ export function EventLog() {
     return (
       <EmptyState
         tone="error"
-        title="event stream unreachable"
+        title="Event stream unreachable"
         hint={linkError ?? undefined}
       />
     );
@@ -36,7 +36,7 @@ export function EventLog() {
   if (events.length === 0) {
     return (
       <EmptyState
-        title="no events yet"
+        title="No events yet"
         hint="The agent loop writes here as it runs."
       />
     );
@@ -45,66 +45,62 @@ export function EventLog() {
   return (
     <div className="flex h-full flex-col">
       {selectedNodeId ? (
-        <button
-          type="button"
-          onClick={() => setOnlySelected((v) => !v)}
-          className="panel-label sticky top-0 z-10 flex items-center gap-1.5 border-b border-hairline bg-panel-raised px-3 py-1.5 text-left text-[9px] transition-colors hover:text-ink"
-        >
-          <span
-            className="h-2 w-2 rounded-sm border"
-            style={{
-              borderColor: onlySelected ? "#22d3ee" : "#2b364d",
-              background: onlySelected ? "#22d3ee" : "transparent",
-            }}
+        <label className="sticky top-0 z-10 flex cursor-pointer items-center gap-2 border-b border-hairline bg-panel px-3.5 py-2 text-[12px] text-ink-dim">
+          <input
+            type="checkbox"
+            checked={onlySelected}
+            onChange={(e) => setOnlySelected(e.target.checked)}
+            className="h-3.5 w-3.5 accent-[var(--accent)]"
           />
-          only {nodes[selectedNodeId]?.name ?? selectedNodeId}
-        </button>
+          Only {nodes[selectedNodeId]?.name ?? selectedNodeId}
+        </label>
       ) : null}
 
       {rows.length === 0 ? (
         <EmptyState
-          title="no events for this node"
+          title="No events for this node"
           hint="Clear the filter to see the whole mesh."
         />
       ) : (
         <ul className="flex flex-col">
           {rows.map((event) => {
-            const tone = eventColor(event.type);
+            const severity = eventSeverity(event.type);
+            const tone = SEVERITY_COLORS[severity];
             const node = event.node_id ? nodes[event.node_id] : undefined;
+            const emphatic = severity === "danger" || severity === "notice";
+
             return (
               <li
                 key={event.id}
                 onClick={() => event.node_id && selectNode(event.node_id)}
-                className={`animate-rise flex gap-2 border-b border-hairline/40 px-3 py-1.5 ${
-                  event.node_id ? "cursor-pointer hover:bg-panel-raised" : ""
+                className={`animate-rise row-hover flex gap-2.5 border-b border-hairline/60 px-3.5 py-2 ${
+                  event.node_id ? "cursor-pointer" : ""
                 }`}
               >
-                <span className="data mt-px shrink-0 text-[10px] text-ink-faint">
+                <span className="num mt-px shrink-0 text-[11.5px] text-ink-faint">
                   {clock(event.ts)}
                 </span>
                 <span
-                  className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{ background: tone, boxShadow: `0 0 6px ${tone}` }}
+                  aria-hidden="true"
+                  className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{ background: emphatic ? tone : NEUTRAL.lineBright }}
                 />
                 <div className="flex min-w-0 flex-col gap-0.5">
-                  <span className="flex items-baseline gap-1.5">
+                  <span className="flex flex-wrap items-baseline gap-x-2">
                     <span
-                      className="data text-[10px] tracking-wider uppercase"
-                      style={{ color: tone }}
+                      className="text-[12px]"
+                      style={{ color: emphatic ? tone : NEUTRAL.dim }}
                     >
                       {event.type}
                     </span>
                     {node ? (
-                      <span
-                        className="data text-[10px]"
-                        style={{ color: operatorSwatch(node.operator).hex }}
-                      >
+                      <span className="text-[11.5px] text-ink-faint">
                         {node.name}
                       </span>
                     ) : null}
                   </span>
                   {event.message ? (
-                    <span className="text-[11.5px] leading-snug break-words text-ink-dim">
+                    <span className="text-[12.5px] leading-relaxed break-words text-ink-dim">
                       {event.message}
                     </span>
                   ) : null}

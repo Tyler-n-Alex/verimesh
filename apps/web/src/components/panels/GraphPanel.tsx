@@ -1,17 +1,21 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AUTH_TIER_CODE, type AuthTier } from "@verimesh/shared";
+import { AUTH_TIER_CODE, authzConfig, type AuthTier } from "@verimesh/shared";
 import { EmptyState, SkeletonRows } from "@/components/ui/Panel";
-import { Pill } from "@/components/ui/Pill";
+import { Badge } from "@/components/ui/Pill";
 import { QueryFooter, SourceBadge } from "@/components/ui/SourceBadge";
 import { ago, clock, shortHash } from "@/lib/format";
-import { operatorSwatch, tierSwatch, verdictSwatch, OPERATOR_COLORS } from "@/lib/palette";
+import {
+  NEUTRAL,
+  OPERATOR_COLORS,
+  tierSwatch,
+  verdictSwatch,
+} from "@/lib/palette";
 import {
   AUTHZ_LEDGER_QUERY,
   NODE_TIMELINE_QUERY,
   OPERATOR_DECISIONS_QUERY,
-  REGISTRY_EXPLORER,
   type SubgraphApproval,
   type SubgraphDecision,
   type SubgraphFreeze,
@@ -34,9 +38,9 @@ import { useMeshStore } from "@/store/mesh";
 type Tab = "decisions" | "timeline" | "authz";
 
 const TABS: { key: Tab; label: string }[] = [
-  { key: "decisions", label: "decisions" },
-  { key: "timeline", label: "timeline" },
-  { key: "authz", label: "✦ authz" },
+  { key: "decisions", label: "Decisions" },
+  { key: "timeline", label: "Timeline" },
+  { key: "authz", label: "Authorization" },
 ];
 
 export function GraphPanel() {
@@ -44,24 +48,32 @@ export function GraphPanel() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <nav className="flex shrink-0 border-b border-hairline bg-abyss">
-        {TABS.map((entry) => (
-          <button
-            key={entry.key}
-            type="button"
-            onClick={() => setTab(entry.key)}
-            className="panel-label relative px-3 py-1.5 text-[9px] transition-colors"
-            style={{ color: tab === entry.key ? "#e8eefc" : undefined }}
-          >
-            {entry.label}
-            {tab === entry.key ? (
-              <span
-                className="absolute inset-x-1 bottom-0 h-0.5 rounded-full"
-                style={{ background: "#22d3ee", boxShadow: "0 0 8px #22d3ee" }}
-              />
-            ) : null}
-          </button>
-        ))}
+      <nav
+        className="flex shrink-0 gap-1 border-b border-hairline px-2.5"
+        role="tablist"
+      >
+        {TABS.map((entry) => {
+          const active = tab === entry.key;
+          return (
+            <button
+              key={entry.key}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setTab(entry.key)}
+              className="relative px-2 py-2.5 text-[12.5px] transition-colors"
+              style={{ color: active ? NEUTRAL.text : NEUTRAL.faint }}
+            >
+              {entry.label}
+              {active ? (
+                <span
+                  className="absolute inset-x-1 -bottom-px h-[2px] rounded-full"
+                  style={{ background: NEUTRAL.text }}
+                />
+              ) : null}
+            </button>
+          );
+        })}
       </nav>
 
       <div className="min-h-0 flex-1">
@@ -80,7 +92,9 @@ function DecisionHistory() {
   const [verdict, setVerdict] = useState("all");
   const openAudit = useMeshStore((s) => s.openAudit);
 
-  const { result, loading } = useSubgraphQuery<{ decisions: SubgraphDecision[] }>(
+  const { result, loading } = useSubgraphQuery<{
+    decisions: SubgraphDecision[];
+  }>(
     OPERATOR_DECISIONS_QUERY,
     { operator, first: 50 },
     () => ({ decisions: fixtureDecisionsByOperator(operator) }),
@@ -95,39 +109,36 @@ function DecisionHistory() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-hairline px-3 py-1.5">
-        {Object.keys(OPERATOR_COLORS).map((id) => (
-          <button key={id} type="button" onClick={() => setOperator(id)}>
-            <Pill
-              color={operatorSwatch(id).hex}
-              className={operator === id ? "" : "opacity-40"}
-            >
-              {id}
-            </Pill>
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-hairline px-3.5 py-2.5">
+        <Segmented
+          options={Object.keys(OPERATOR_COLORS)}
+          value={operator}
+          onChange={setOperator}
+        />
         <span className="ml-auto">
           <SourceBadge result={result} loading={loading} />
         </span>
       </div>
 
-      <div className="flex flex-wrap gap-1 border-b border-hairline px-3 py-1.5">
-        {VERDICT_FILTERS.map((v) => (
-          <button
-            key={v}
-            type="button"
-            onClick={() => setVerdict(v)}
-            className="data rounded-sm border px-1.5 py-0.5 text-[10px] tracking-wide transition-colors"
-            style={{
-              borderColor: verdict === v ? "#2b364d" : "transparent",
-              background: verdict === v ? "#111725" : "transparent",
-              color: v === "all" ? "#94a3b8" : verdictSwatch(v).hex,
-              opacity: verdict === v ? 1 : 0.5,
-            }}
-          >
-            {v === "all" ? "all" : verdictSwatch(v).label}
-          </button>
-        ))}
+      <div className="flex flex-wrap gap-1.5 border-b border-hairline px-3.5 py-2">
+        {VERDICT_FILTERS.map((v) => {
+          const active = verdict === v;
+          return (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setVerdict(v)}
+              className="rounded border px-2 py-1 text-[11.5px] transition-colors"
+              style={{
+                borderColor: active ? NEUTRAL.lineBright : "transparent",
+                background: active ? NEUTRAL.raised : "transparent",
+                color: active ? NEUTRAL.text : NEUTRAL.faint,
+              }}
+            >
+              {v === "all" ? "All" : verdictSwatch(v).label}
+            </button>
+          );
+        })}
       </div>
 
       <div className="scroll-thin min-h-0 flex-1 overflow-y-auto">
@@ -135,7 +146,7 @@ function DecisionHistory() {
           <SkeletonRows rows={5} />
         ) : rows.length === 0 ? (
           <EmptyState
-            title={`no indexed decisions for ${operator}`}
+            title={`No indexed decisions for ${operator}`}
             hint={
               verdict === "all"
                 ? "The subgraph has not indexed a decision for this operator yet."
@@ -144,44 +155,50 @@ function DecisionHistory() {
           />
         ) : (
           <ul className="flex flex-col">
-            {rows.map((decision) => (
-              <li
-                key={decision.id}
-                onClick={() =>
-                  openAudit({ kind: "decision", decisionId: decision.id })
-                }
-                className="animate-rise flex cursor-pointer flex-col gap-1 border-b border-hairline/40 px-3 py-1.5 hover:bg-panel-raised"
-              >
-                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                  <span className="data text-[11.5px] font-semibold text-ink">
-                    {decision.nodeId}
-                  </span>
-                  <span className="data text-[11px] text-ink-dim">
-                    {decision.action}
-                  </span>
-                  <span
-                    className="data text-[10px] tracking-wide"
-                    style={{ color: verdictSwatch(decision.verdict).hex }}
-                  >
-                    {verdictSwatch(decision.verdict).label}
-                  </span>
-                  <span className="data ml-auto text-[10px] text-ink-faint">
-                    {ago(Number(decision.ts) * 1000, Date.now())} ago
-                  </span>
-                </div>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <TierChip tier={decision.authTier} />
-                  {decision.humanAuthorized ? (
-                    <Pill color="#e879f9">human authorized</Pill>
-                  ) : (
-                    <Pill color="#34d399">autonomous</Pill>
-                  )}
-                  <span className="data text-[9px] text-ink-faint">
-                    tx {shortHash(decision.txHash, 4)}
-                  </span>
-                </div>
-              </li>
-            ))}
+            {rows.map((decision) => {
+              const vd = verdictSwatch(decision.verdict);
+              return (
+                <li
+                  key={decision.id}
+                  onClick={() =>
+                    openAudit({ kind: "decision", decisionId: decision.id })
+                  }
+                  className="animate-rise row-hover flex cursor-pointer flex-col gap-1.5 border-b border-hairline/60 px-3.5 py-2.5"
+                >
+                  <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+                    <span className="text-[13px] font-medium text-ink">
+                      {decision.nodeId}
+                    </span>
+                    <span className="text-[12.5px] text-ink-dim">
+                      {decision.action}
+                    </span>
+                    <span
+                      className="text-[12px]"
+                      style={{
+                        color:
+                          vd.severity === "none" ? NEUTRAL.faint : vd.hex,
+                      }}
+                    >
+                      {vd.label}
+                    </span>
+                    <span className="num ml-auto text-[11.5px] text-ink-faint">
+                      {ago(Number(decision.ts) * 1000, Date.now())} ago
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <TierChip tier={decision.authTier} />
+                    {decision.humanAuthorized ? (
+                      <Badge glyph="◉">Human authorized</Badge>
+                    ) : (
+                      <Badge glyph="○">Autonomous</Badge>
+                    )}
+                    <span className="data text-[11px] text-ink-faint">
+                      {shortHash(decision.txHash, 4)}
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
@@ -194,7 +211,9 @@ function DecisionHistory() {
 function NodeTimeline() {
   const selectedNodeId = useMeshStore((s) => s.selectedNodeId);
   const nodeName = useMeshStore((s) =>
-    s.selectedNodeId ? (s.nodes[s.selectedNodeId]?.name ?? s.selectedNodeId) : null
+    s.selectedNodeId
+      ? (s.nodes[s.selectedNodeId]?.name ?? s.selectedNodeId)
+      : null
   );
   const openAudit = useMeshStore((s) => s.openAudit);
   const nodeId = selectedNodeId ?? "";
@@ -217,7 +236,7 @@ function NodeTimeline() {
   if (!selectedNodeId) {
     return (
       <EmptyState
-        title="no node selected"
+        title="No node selected"
         hint="Select a node to see everything the subgraph has indexed about it."
       />
     );
@@ -230,14 +249,22 @@ function NodeTimeline() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-hairline px-3 py-1.5">
-        <span className="data text-[11.5px] font-semibold text-ink">
-          {nodeName}
-        </span>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-hairline px-3.5 py-2.5">
+        <span className="text-[13px] font-medium text-ink">{nodeName}</span>
         {history ? (
           <>
-            <Pill color="#fbbf24">{history.incidentCount} incidents</Pill>
-            <Pill color="#f43f5e">{history.violationCount} violations</Pill>
+            <Badge
+              tone={history.incidentCount >= 2 ? "#c9a13f" : undefined}
+              severity={history.incidentCount >= 2 ? "warn" : "none"}
+            >
+              {history.incidentCount} incidents
+            </Badge>
+            <Badge
+              tone={history.violationCount > 0 ? "#d1524f" : undefined}
+              severity={history.violationCount > 0 ? "danger" : "none"}
+            >
+              {history.violationCount} violations
+            </Badge>
           </>
         ) : null}
         <span className="ml-auto">
@@ -250,56 +277,64 @@ function NodeTimeline() {
           <SkeletonRows rows={4} />
         ) : decisions.length === 0 ? (
           <EmptyState
-            title="no indexed incidents"
+            title="No indexed incidents"
             hint={`The subgraph has nothing for ${nodeName} yet — this node has no on-chain history.`}
           />
         ) : (
-          <ol className="flex flex-col px-3 py-2">
+          <ol className="flex flex-col px-3.5 py-3">
             {decisions.map((decision, index) => {
               const freeze = freezeByDecision.get(decision.id);
-              const tone = verdictSwatch(decision.verdict).hex;
+              const vd = verdictSwatch(decision.verdict);
+              const last = index === decisions.length - 1;
               return (
-                <li key={decision.id} className="animate-rise flex gap-2.5">
-                  <div className="flex flex-col items-center pt-1">
+                <li key={decision.id} className="animate-rise flex gap-3">
+                  <div className="flex flex-col items-center pt-[5px]">
                     <span
-                      className="h-2 w-2 shrink-0 rounded-full"
-                      style={{ background: tone, boxShadow: `0 0 8px ${tone}` }}
+                      className="h-1.5 w-1.5 shrink-0 rounded-full"
+                      style={{
+                        background:
+                          vd.severity === "none" ? NEUTRAL.lineBright : vd.hex,
+                      }}
                     />
-                    {index < decisions.length - 1 ? (
-                      <span className="mt-1 w-px flex-1 bg-hairline" />
+                    {!last ? (
+                      <span
+                        className="mt-1.5 w-px flex-1"
+                        style={{ background: NEUTRAL.line }}
+                      />
                     ) : null}
                   </div>
                   <div
                     onClick={() =>
                       openAudit({ kind: "decision", decisionId: decision.id })
                     }
-                    className={`flex min-w-0 flex-1 cursor-pointer flex-col gap-1 ${
-                      index < decisions.length - 1 ? "pb-3" : ""
-                    }`}
+                    className={`flex min-w-0 flex-1 cursor-pointer flex-col gap-1.5 ${last ? "" : "pb-4"}`}
                   >
-                    <div className="flex flex-wrap items-baseline gap-x-2">
-                      <span className="data text-[11.5px] text-ink">
+                    <div className="flex flex-wrap items-baseline gap-x-2.5">
+                      <span className="text-[12.5px] text-ink">
                         {decision.action}
                       </span>
                       <span
-                        className="data text-[10px]"
-                        style={{ color: tone }}
+                        className="text-[12px]"
+                        style={{
+                          color:
+                            vd.severity === "none" ? NEUTRAL.faint : vd.hex,
+                        }}
                       >
-                        {verdictSwatch(decision.verdict).label}
+                        {vd.label}
                       </span>
-                      <span className="data ml-auto text-[10px] text-ink-faint">
+                      <span className="num ml-auto text-[11.5px] text-ink-faint">
                         {clock(Number(decision.ts) * 1000)}
                       </span>
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
                       <TierChip tier={decision.authTier} />
                       {decision.humanAuthorized ? (
-                        <Pill color="#e879f9">human authorized</Pill>
+                        <Badge glyph="◉">Human authorized</Badge>
                       ) : null}
                     </div>
                     {freeze ? (
-                      <p className="text-[11px] leading-snug text-ink-faint">
-                        froze: {freeze.reason}
+                      <p className="text-[12px] leading-relaxed text-ink-faint">
+                        Froze: {freeze.reason}
                       </p>
                     ) : null}
                   </div>
@@ -335,14 +370,13 @@ function AuthzLedger() {
   const authorities = result?.data?.humanAuthorities ?? [];
   const overrides = result?.data?.overrides ?? [];
   const approvals = result?.data?.approvals ?? [];
-
-  const budget = 3;
+  const budget = (authzConfig as { budgetPerWindow: number }).budgetPerWindow;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center gap-1.5 border-b border-hairline px-3 py-1.5">
-        <span className="panel-label text-[9px]">
-          who authorized what · from the registry
+      <div className="flex items-center gap-2 border-b border-hairline px-3.5 py-2.5">
+        <span className="text-[12px] text-ink-faint">
+          Who authorized what, from the registry
         </span>
         <span className="ml-auto">
           <SourceBadge result={result} loading={loading} />
@@ -354,62 +388,59 @@ function AuthzLedger() {
           <SkeletonRows rows={4} />
         ) : authorities.length === 0 && overrides.length === 0 ? (
           <EmptyState
-            title="no human authorizations indexed"
+            title="No human authorizations indexed"
             hint="Every accepted World ID scan emits a HumanApproval event; they appear here once indexed."
           />
         ) : (
           <div className="flex flex-col">
-            <section className="flex flex-col gap-1.5 px-3 py-2">
-              <span className="panel-label text-[9px]">
-                per human · remaining override budget
-              </span>
+            <section className="flex flex-col gap-2 px-3.5 py-3">
+              <h4 className="text-[12px] font-medium text-ink-faint">
+                Per human · remaining override budget
+              </h4>
               {authorities.map((authority) => {
                 const remaining = Math.max(0, budget - authority.overrideCount);
-                const tone =
-                  remaining === 0
-                    ? "#f43f5e"
-                    : remaining === 1
-                      ? "#fbbf24"
-                      : "#34d399";
+                const exhausted = remaining === 0;
+                const low = remaining === 1;
+                const tone = exhausted
+                  ? "#d1524f"
+                  : low
+                    ? "#c9a13f"
+                    : NEUTRAL.dim;
                 return (
                   <div
                     key={authority.id}
-                    className="flex flex-col gap-1 rounded-sm border border-hairline bg-abyss px-2 py-1.5"
+                    className="flex flex-col gap-2 rounded-lg border border-hairline bg-abyss px-2.5 py-2"
                   >
                     <div className="flex items-baseline gap-2">
-                      <span className="data truncate text-[11px] text-ink">
+                      <span className="data truncate text-[12px] text-ink-dim">
                         {shortHash(authority.worldIdNullifier, 8)}
                       </span>
                       <span className="ml-auto flex gap-1">
                         {authority.operators.map((op) => (
-                          <Pill key={op} color={operatorSwatch(op).hex}>
-                            {op}
-                          </Pill>
+                          <Badge key={op}>{op}</Badge>
                         ))}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2.5">
                       <span className="flex gap-1">
                         {Array.from({ length: budget }).map((_, i) => (
                           <span
                             key={i}
-                            className="h-1.5 w-5 rounded-full"
+                            className="h-1 w-6 rounded-full"
                             style={{
                               background:
-                                i < authority.overrideCount ? tone : "#1c2436",
-                              boxShadow:
                                 i < authority.overrideCount
-                                  ? `0 0 6px ${tone}`
-                                  : "none",
+                                  ? tone
+                                  : NEUTRAL.line,
                             }}
                           />
                         ))}
                       </span>
-                      <span className="data text-[10px]" style={{ color: tone }}>
+                      <span className="num text-[11.5px]" style={{ color: tone }}>
                         {remaining} of {budget} left
                       </span>
-                      <span className="data ml-auto text-[9px] text-ink-faint">
-                        last {clock(Number(authority.lastOverrideTs) * 1000)}
+                      <span className="num ml-auto text-[11.5px] text-ink-faint">
+                        Last {clock(Number(authority.lastOverrideTs) * 1000)}
                       </span>
                     </div>
                   </div>
@@ -417,10 +448,10 @@ function AuthzLedger() {
               })}
             </section>
 
-            <section className="flex flex-col gap-1.5 border-t border-hairline px-3 py-2">
-              <span className="panel-label text-[9px]">
-                per decision · distinct signers + tier
-              </span>
+            <section className="flex flex-col gap-2 border-t border-hairline px-3.5 py-3">
+              <h4 className="text-[12px] font-medium text-ink-faint">
+                Per decision · distinct signers and tier
+              </h4>
               {overrides.map((override) => {
                 const signers = approvals.filter(
                   (a) => a.decisionId === override.decisionId
@@ -437,37 +468,31 @@ function AuthzLedger() {
                         decisionId: override.decisionId,
                       })
                     }
-                    className="flex cursor-pointer flex-col gap-1 rounded-sm border border-hairline bg-abyss px-2 py-1.5 hover:border-hairline-bright"
+                    className="row-hover flex cursor-pointer flex-col gap-2 rounded-lg border border-hairline bg-abyss px-2.5 py-2"
                   >
-                    <div className="flex flex-wrap items-baseline gap-x-2">
-                      <span className="data text-[11px] text-ink-dim">
+                    <div className="flex flex-wrap items-baseline gap-x-2.5">
+                      <span className="data text-[11.5px] text-ink-faint">
                         {shortHash(override.decisionId, 5)}
                       </span>
-                      <span className="data text-[11px] text-ink">
+                      <span className="text-[12.5px] text-ink">
                         {override.chosenAction}
                       </span>
-                      <span className="data ml-auto text-[9px] text-ink-faint">
+                      <span className="num ml-auto text-[11.5px] text-ink-faint">
                         {clock(Number(override.ts) * 1000)}
                       </span>
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <Pill
-                        color={
-                          distinct.size >= 2 ? "#e879f9" : "#fbbf24"
-                        }
-                        title="distinct nullifiers that signed this decision"
+                      <Badge
+                        glyph={distinct.size >= 2 ? "◉" : "◑"}
+                        title="Distinct nullifiers that signed this decision"
                       >
                         {distinct.size} distinct human
                         {distinct.size === 1 ? "" : "s"}
-                      </Pill>
+                      </Badge>
                       {signers.map((signer) => (
-                        <Pill
-                          key={signer.id}
-                          color={operatorSwatch(signer.operator).hex}
-                          title={signer.worldIdNullifier}
-                        >
+                        <Badge key={signer.id} title={signer.worldIdNullifier}>
                           {signer.operator}
-                        </Pill>
+                        </Badge>
                       ))}
                     </div>
                   </div>
@@ -483,12 +508,46 @@ function AuthzLedger() {
   );
 }
 
+function Segmented({
+  options,
+  value,
+  onChange,
+}: {
+  options: string[];
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  return (
+    <div className="flex rounded-md border border-hairline p-0.5">
+      {options.map((option) => {
+        const active = option === value;
+        return (
+          <button
+            key={option}
+            type="button"
+            onClick={() => onChange(option)}
+            className="rounded px-2.5 py-1 text-[12px] transition-colors"
+            style={{
+              background: active ? NEUTRAL.raised : "transparent",
+              color: active ? NEUTRAL.text : NEUTRAL.faint,
+            }}
+          >
+            {option}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function TierChip({ tier }: { tier: number }) {
   const name = (Object.keys(AUTH_TIER_CODE) as AuthTier[]).find(
     (key) => AUTH_TIER_CODE[key] === tier
   );
   const swatch = tierSwatch(name);
-  return <Pill color={swatch.hex}>{swatch.label}</Pill>;
+  return (
+    <Badge tone={swatch.hex} severity={swatch.severity} glyph={swatch.glyph}>
+      {swatch.label}
+    </Badge>
+  );
 }
-
-export { REGISTRY_EXPLORER };

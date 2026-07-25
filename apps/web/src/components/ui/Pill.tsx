@@ -1,57 +1,110 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { NEUTRAL, statusToken, type Severity } from "@/lib/palette";
 
-export function Pill({
-  color,
+export function Badge({
   children,
-  pulse = false,
+  tone,
+  severity = "none",
+  glyph,
   title,
   className = "",
 }: {
-  color: string;
   children: ReactNode;
-  pulse?: boolean;
+  tone?: string;
+  severity?: Severity;
+  glyph?: string;
   title?: string;
   className?: string;
 }) {
+  const emphatic = severity === "danger" || severity === "notice";
+  const color = tone ?? NEUTRAL.dim;
+
   return (
     <span
       title={title}
-      className={`data inline-flex items-center gap-1.5 rounded-sm border px-1.5 py-0.5 text-[11px] leading-none tracking-wide whitespace-nowrap ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded border px-1.5 py-[3px] text-[12px] leading-none whitespace-nowrap ${className}`}
       style={{
-        borderColor: `${color}55`,
-        background: `${color}12`,
-        color,
+        borderColor: emphatic ? `${color}4d` : NEUTRAL.line,
+        background: emphatic ? `${color}14` : "transparent",
+        color: severity === "none" ? NEUTRAL.dim : color,
       }}
     >
-      <span
-        className={`h-1.5 w-1.5 shrink-0 rounded-full ${pulse ? "animate-pulse-dot" : ""}`}
-        style={{ background: color, boxShadow: `0 0 8px ${color}` }}
-      />
+      {glyph ? (
+        <span aria-hidden="true" className="text-[10px] leading-none">
+          {glyph}
+        </span>
+      ) : null}
       {children}
     </span>
   );
 }
 
-export function Dot({
-  color,
-  pulse = false,
-  size = 8,
+export const Pill = Badge;
+
+export function StatusTag({
+  status,
+  withLabel = true,
+  attention = false,
 }: {
-  color: string;
-  pulse?: boolean;
-  size?: number;
+  status: string;
+  withLabel?: boolean;
+  attention?: boolean;
+}) {
+  const token = statusToken(status);
+  const urgent = token.severity === "danger" || token.severity === "notice";
+
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 whitespace-nowrap"
+      style={{ color: token.severity === "none" ? NEUTRAL.dim : token.hex }}
+      title={token.label}
+    >
+      <span
+        aria-hidden="true"
+        className={`text-[11px] leading-none ${attention && urgent ? "animate-attention" : ""}`}
+      >
+        {token.glyph}
+      </span>
+      {withLabel ? (
+        <span className="text-[12px] leading-none">{token.label}</span>
+      ) : null}
+    </span>
+  );
+}
+
+export function OperatorTag({
+  operator,
+  muted = false,
+}: {
+  operator: string;
+  muted?: boolean;
 }) {
   return (
     <span
-      className={`inline-block shrink-0 rounded-full ${pulse ? "animate-pulse-dot" : ""}`}
+      className="inline-flex items-center gap-1 rounded border px-1.5 py-[2px] text-[11.5px] leading-none whitespace-nowrap"
       style={{
-        width: size,
-        height: size,
-        background: color,
-        boxShadow: `0 0 ${size} ${color}`,
+        borderColor: NEUTRAL.line,
+        color: muted ? NEUTRAL.faint : NEUTRAL.dim,
       }}
+    >
+      <span
+        aria-hidden="true"
+        className="h-2 w-2 rounded-[2px]"
+        style={{ background: `var(--${operator.toLowerCase()}, ${NEUTRAL.faint})` }}
+      />
+      {operator}
+    </span>
+  );
+}
+
+export function Dot({ color, size = 6 }: { color: string; size?: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-block shrink-0 rounded-full"
+      style={{ width: size, height: size, background: color }}
     />
   );
 }
@@ -68,18 +121,44 @@ export function Metric({
   tone?: string;
 }) {
   return (
-    <div className="flex flex-col gap-0.5 rounded-sm border border-hairline bg-abyss px-2 py-1.5">
-      <span className="panel-label text-[9px] tracking-[0.12em]">{label}</span>
+    <div className="flex flex-col gap-1">
+      <span className="text-[11.5px] leading-none text-ink-faint">{label}</span>
       <span
-        className="data text-[15px] leading-none font-semibold"
+        className="num text-[17px] leading-none font-medium"
         style={{ color: tone ?? "var(--color-ink)" }}
       >
         {value}
         {unit ? (
-          <span className="ml-0.5 text-[10px] font-normal text-ink-faint">
+          <span className="ml-0.5 text-[11px] font-normal text-ink-faint">
             {unit}
           </span>
         ) : null}
+      </span>
+    </div>
+  );
+}
+
+export function KeyValue({
+  label,
+  value,
+  mono = false,
+  tone,
+  wrap = false,
+}: {
+  label: string;
+  value: ReactNode;
+  mono?: boolean;
+  tone?: string;
+  wrap?: boolean;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <span className="text-[11.5px] leading-none text-ink-faint">{label}</span>
+      <span
+        className={`text-[13px] leading-snug ${mono ? "data" : ""} ${wrap ? "break-all" : "truncate"}`}
+        style={{ color: tone ?? "var(--color-ink)" }}
+      >
+        {value}
       </span>
     </div>
   );

@@ -1,59 +1,62 @@
 "use client";
 
-import { OPERATOR_COLORS, STATUS_COLORS, STATUS_ORDER } from "@/lib/palette";
+import { NEUTRAL, OPERATOR_COLORS, STATUS_ORDER, STATUS_TOKENS } from "@/lib/palette";
 
 export function MeshLegend() {
   return (
-    <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
-      <span className="flex items-center gap-1.5">
-        <span className="panel-label text-[8.5px]">fill</span>
-        {Object.entries(OPERATOR_COLORS).map(([id, swatch]) => (
-          <span key={id} className="flex items-center gap-1">
+    <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1.5">
+      <span className="flex items-center gap-2">
+        <span className="text-[11.5px] text-ink-faint">Operator</span>
+        {Object.keys(OPERATOR_COLORS).map((id) => (
+          <span key={id} className="flex items-center gap-1.5">
             <span
-              className="h-2.5 w-2.5 rounded-full"
-              style={{
-                background: swatch.hex,
-                boxShadow: `0 0 7px ${swatch.hex}`,
-              }}
+              aria-hidden="true"
+              className="h-2 w-2 rounded-[2px]"
+              style={{ background: OPERATOR_COLORS[id].hex }}
             />
-            <span className="data text-[10.5px]" style={{ color: swatch.hex }}>
-              {id}
-            </span>
+            <span className="text-[11.5px] text-ink-dim">{id}</span>
           </span>
         ))}
       </span>
 
-      <span className="h-3 w-px bg-hairline" />
+      <span className="h-3.5 w-px bg-hairline" />
 
-      <span className="flex items-center gap-1.5">
-        <span className="panel-label text-[8.5px]">ring</span>
-        {STATUS_ORDER.map((status) => (
-          <span key={status} className="flex items-center gap-1">
-            <span
-              className="h-2.5 w-2.5 rounded-full border-2"
-              style={{ borderColor: STATUS_COLORS[status].hex }}
-            />
-            <span className="data text-[10px] text-ink-dim">
-              {status === "awaiting_human" ? "human" : status}
+      <span className="flex items-center gap-2.5">
+        <span className="text-[11.5px] text-ink-faint">Status</span>
+        {STATUS_ORDER.map((status) => {
+          const token = STATUS_TOKENS[status];
+          return (
+            <span key={status} className="flex items-center gap-1">
+              <span
+                aria-hidden="true"
+                className="text-[10px] leading-none"
+                style={{
+                  color: token.severity === "none" ? NEUTRAL.faint : token.hex,
+                }}
+              >
+                {token.glyph}
+              </span>
+              <span className="text-[11.5px] text-ink-dim">{token.label}</span>
             </span>
-          </span>
-        ))}
+          );
+        })}
       </span>
 
-      <span className="h-3 w-px bg-hairline" />
+      <span className="h-3.5 w-px bg-hairline" />
 
       <span
         className="flex items-center gap-1.5"
-        title="An edge is coloured by each endpoint's own operator, so a cross-operator link is a visible gradient between two operator colours."
+        title="An edge takes each endpoint's own operator colour, so a cross-operator link reads as a gradient between two operators."
       >
         <span
-          className="h-0.5 w-6"
+          aria-hidden="true"
+          className="h-px w-6"
           style={{
             background:
-              "repeating-linear-gradient(90deg,#38bdf8 0 5px,#fb923c 5px 8px)",
+              "repeating-linear-gradient(90deg,#8fa6cc 0 4px,transparent 4px 7px)",
           }}
         />
-        <span className="data text-[10px] text-ink-dim">cross-operator link</span>
+        <span className="text-[11.5px] text-ink-dim">Cross-operator link</span>
       </span>
     </div>
   );

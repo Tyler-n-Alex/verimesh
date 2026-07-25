@@ -1,6 +1,7 @@
 "use client";
 
-import { Pill } from "@/components/ui/Pill";
+import { Badge } from "@/components/ui/Pill";
+import { ACCENT } from "@/lib/palette";
 import type { GqlResult } from "@/lib/subgraph";
 
 export function SourceBadge({
@@ -11,45 +12,43 @@ export function SourceBadge({
   loading: boolean;
 }) {
   if (loading && !result) {
-    return (
-      <Pill color="#22d3ee" pulse>
-        querying
-      </Pill>
-    );
+    return <Badge glyph="◌">Querying</Badge>;
   }
   if (!result) return null;
 
   if (result.source === "live") {
     return (
-      <Pill color="#34d399" title={result.endpoint}>
-        subgraph · {result.ms}ms
-      </Pill>
+      <Badge tone={ACCENT} severity="notice" glyph="◉" title={result.endpoint}>
+        Subgraph · {result.ms}ms
+      </Badge>
     );
   }
 
   return (
-    <Pill
-      color="#fbbf24"
+    <Badge
+      tone="#c9a13f"
+      severity="warn"
+      glyph="△"
       title={
         result.error
-          ? `subgraph unavailable: ${result.error}`
+          ? `Subgraph unavailable: ${result.error}`
           : "SUBGRAPH_URL is not set — showing a fixture shaped exactly like schema.graphql"
       }
     >
-      fixture
-    </Pill>
+      Fixture
+    </Badge>
   );
 }
 
 export function QueryFooter({ result }: { result: GqlResult<unknown> | null }) {
   if (!result) return null;
   return (
-    <div className="flex flex-col gap-0.5 border-t border-hairline bg-abyss px-3 py-1.5">
-      <span className="data truncate text-[9px] text-ink-faint">
+    <div className="flex shrink-0 flex-col gap-0.5 border-t border-hairline px-3.5 py-2">
+      <span className="data truncate text-[11px] text-ink-faint">
         {result.endpoint}
       </span>
       {result.error ? (
-        <span className="data text-[9px]" style={{ color: "#fbbf24" }}>
+        <span className="text-[11px]" style={{ color: "#c9a13f" }}>
           {result.error}
         </span>
       ) : null}

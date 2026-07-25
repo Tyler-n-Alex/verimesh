@@ -4,7 +4,7 @@ import { useMemo, useRef, type ComponentRef } from "react";
 import { Line } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { useMeshStore } from "@/store/mesh";
-import { operatorSwatch, statusSwatch } from "@/lib/palette";
+import { operatorSwatch, statusToken } from "@/lib/palette";
 import { worldPos } from "@/lib/layout";
 
 type Triple = [number, number, number];
@@ -40,7 +40,6 @@ export function EdgeLines() {
     return out;
   });
 
-  const intraRef = useRef<LineRef>(null);
   const crossRef = useRef<LineRef>(null);
   const alertRef = useRef<LineRef>(null);
 
@@ -53,13 +52,17 @@ export function EdgeLines() {
       const a = nodes[edge.from];
       const b = nodes[edge.to];
       if (!a || !b) continue;
-      const target = edge.crossOperator ? crossSet : intraSet;
-      const gain = edge.crossOperator ? 1.12 : 0.95;
-      target.points.push(worldPos(a), worldPos(b));
-      target.colors.push(
-        toTriple(operatorSwatch(a.operator).hex, gain),
-        toTriple(operatorSwatch(b.operator).hex, gain)
-      );
+
+      if (edge.crossOperator) {
+        crossSet.points.push(worldPos(a), worldPos(b));
+        crossSet.colors.push(
+          toTriple(operatorSwatch(a.operator).hex, 0.72),
+          toTriple(operatorSwatch(b.operator).hex, 0.72)
+        );
+      } else {
+        intraSet.points.push(worldPos(a), worldPos(b));
+        intraSet.colors.push([0.36, 0.36, 0.4], [0.36, 0.36, 0.4]);
+      }
     }
     return { intra: intraSet, cross: crossSet };
   }, [edges, nodeIds]);
@@ -77,49 +80,38 @@ export function EdgeLines() {
       const bHot = ALERT_STATUSES.has(b.status);
       if (!aHot && !bHot) continue;
       if (DIM_STATUSES.has(a.status) || DIM_STATUSES.has(b.status)) continue;
+
+      const hot = statusToken(aHot ? a.status : b.status).hex;
       set.points.push(worldPos(a), worldPos(b));
-      set.colors.push(
-        toTriple(statusSwatch(aHot ? a.status : b.status).hex, 1.45),
-        toTriple(statusSwatch(bHot ? b.status : a.status).hex, 1.45)
-      );
+      set.colors.push(toTriple(hot, 0.95), toTriple(hot, 0.95));
     }
     return set;
   }, [edges, alertSignature]);
 
   useFrame((_, delta) => {
     const { nodes, nodeIds: ids } = useMeshStore.getState();
-
     let load = 0;
     for (const id of ids) load += nodes[id]?.metrics.load ?? 0;
     const avg = ids.length > 0 ? load / ids.length : 0.4;
-    const flow = 0.22 + avg * 0.9;
 
     const crossMat = crossRef.current?.material;
-    if (crossMat) crossMat.dashOffset -= delta * flow;
+    if (crossMat) crossMat.dashOffset -= delta * (0.04 + avg * 0.16);
 
     const alertMat = alertRef.current?.material;
-    if (alertMat) alertMat.dashOffset -= delta * (flow * 3.4);
-
-    const intraMat = intraRef.current?.material;
-    if (intraMat) intraMat.dashOffset -= delta * flow * 0.55;
+    if (alertMat) alertMat.dashOffset -= delta * 0.34;
   });
 
   return (
     <group>
       {intra.points.length >= 2 ? (
         <Line
-          ref={intraRef}
           segments
           points={intra.points}
           vertexColors={intra.colors}
-          lineWidth={2}
-          dashed
-          dashSize={0.5}
-          gapSize={0.28}
+          lineWidth={1}
           transparent
-          opacity={0.62}
+          opacity={0.85}
           depthWrite={false}
-          toneMapped={false}
         />
       ) : null}
 
@@ -129,14 +121,13 @@ export function EdgeLines() {
           segments
           points={cross.points}
           vertexColors={cross.colors}
-          lineWidth={3.4}
+          lineWidth={1.8}
           dashed
-          dashSize={0.34}
-          gapSize={0.2}
+          dashSize={0.24}
+          gapSize={0.14}
           transparent
           opacity={0.95}
           depthWrite={false}
-          toneMapped={false}
         />
       ) : null}
 
@@ -146,14 +137,13 @@ export function EdgeLines() {
           segments
           points={alert.points}
           vertexColors={alert.colors}
-          lineWidth={3.8}
+          lineWidth={2.2}
           dashed
-          dashSize={0.22}
-          gapSize={0.16}
+          dashSize={0.18}
+          gapSize={0.12}
           transparent
-          opacity={0.75}
+          opacity={0.9}
           depthWrite={false}
-          toneMapped={false}
         />
       ) : null}
     </group>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { NEUTRAL } from "@/lib/palette";
 
 const STEPS = [1, 1.15, 1.3] as const;
 const STORAGE_KEY = "verimesh.projector";
@@ -11,8 +12,7 @@ export function ProjectorToggle() {
   useEffect(() => {
     const stored = window.localStorage.getItem(STORAGE_KEY);
     if (stored === null) return;
-    const parsed = Number(stored);
-    const found = STEPS.findIndex((s) => s === parsed);
+    const found = STEPS.findIndex((s) => s === Number(stored));
     if (found >= 0) setIndex(found);
   }, []);
 
@@ -24,20 +24,21 @@ export function ProjectorToggle() {
   }, [index]);
 
   const scale = STEPS[index];
+  const on = scale !== 1;
 
   return (
     <button
       type="button"
       onClick={() => setIndex((i) => (i + 1) % STEPS.length)}
-      title="Scale the whole console up for a projector. Cycles 100% / 115% / 130%."
-      className="data shrink-0 rounded-sm border px-1.5 py-0.5 text-[11px] leading-none tracking-wide transition-colors"
+      title="Scale the whole console up for a projector. Cycles 100%, 115%, 130%."
+      className="rounded-md border px-2.5 py-1.5 text-[12px] whitespace-nowrap transition-colors"
       style={{
-        borderColor: scale === 1 ? "#2b364d" : "#22d3ee66",
-        background: scale === 1 ? "transparent" : "#22d3ee14",
-        color: scale === 1 ? "#5b6880" : "#22d3ee",
+        borderColor: on ? NEUTRAL.lineBright : NEUTRAL.line,
+        background: on ? NEUTRAL.raised : "transparent",
+        color: on ? NEUTRAL.text : NEUTRAL.faint,
       }}
     >
-      {scale === 1 ? "projector" : `${Math.round(scale * 100)}%`}
+      {on ? `Projector ${Math.round(scale * 100)}%` : "Projector"}
     </button>
   );
 }

@@ -376,6 +376,52 @@ the endpoint in later. Ask B for a fixture at 15:00 if the spike is still runnin
 
 ---
 
+## A7 · UI redesign — professional / restrained (added on request, done 18:20)
+
+The first build was a neon HUD: saturated hues, glow on every element, bloom in the 3D. Replaced
+with a **neutral-dark SaaS console** — the Linear / Grafana register. `pnpm build` green.
+
+- **True-neutral greys, one accent.** `globals.css` keeps the same token *names* (so no class churn)
+  and changes what they mean: canvas `#0b0b0d` · panel `#131315` · hairline `#26262a` ·
+  text `#ededf0` / `#a1a1a8` / `#6e6e76`, plus exactly one accent `#5b8cff` for interactive and
+  in-progress states. Every `box-shadow: 0 0 Npx <colour>` glow is gone; overlays use a neutral
+  elevation shadow instead. Uppercase wide-tracked HUD labels are gone; type is sentence case, and
+  **mono is now reserved for real data** — hashes, nullifiers, ids, queries — not for chrome.
+- **Colour is the last channel, not the first.** Status reads as a **shape** first
+  (`○` healthy · `△` warning · `▲` violation · `❚❚` awaiting human · `⊘` isolated · `·` offline) plus
+  a **text label**, so it survives greyscale, a washed-out projector, and colour-blind viewers.
+  Colour is spent only on `violation` (muted red `#d1524f`), `warning` (muted amber `#c9a13f`) and
+  `awaiting_human` (the accent) — everything healthy is grey. `Badge` renders flat and neutral unless
+  its severity is `danger`/`notice`.
+- **The 3D is now technical rather than luminous.** `EffectComposer`/`Bloom`/`Vignette` deleted
+  (also a perf win), tone mapping off, emissive gone. Nodes are matte cylinders that read as rack
+  hardware, lit by a real key/fill pair so they have *form* instead of the flat ambient wash the
+  first pass had. A status ring is drawn **only on non-healthy nodes**, so a healthy mesh is quiet
+  and an unhealthy node is the only thing with a ring on it. Operator identity is a low-chroma tint
+  (`#8fa6cc` / `#ccab8f` / `#ab9acc`) plus an always-on text label — the cross-operator gradient that
+  carries the T2 story survives, just desaturated. Edge dash animation dropped from three animated
+  sets to a slow drift on cross-operator links and a faster one on alerting links.
+- **Motion is down to one primitive.** A 2s opacity `attention` fade on genuinely-pending things,
+  plus a 180ms row `rise`. The scale-pulse "beacon" is gone.
+
+**Two bugs the redesign exposed and fixed:**
+
+1. 🐛 **The top bar claimed "Subgraph Connected" while every query was failing.** It was rendering
+   `subgraphConfigured` — *is the env var set* — not query health. Added `store/subgraph.ts`, which
+   `useSubgraphQuery` reports every result into, so the indicator now reads **Connected / Unreachable /
+   Fixture** from what actually happened, with the endpoint and error in its tooltip.
+2. 🐛 **The audit drawer overflowed horizontally.** Grid items default to `min-width: auto`, so the
+   `bytes32` hashes and the query `<pre>` widened their column past the drawer edge and clipped the
+   copy button. `min-w-0` on the grid children and `SectionCard`.
+
+⚠️ **`SUBGRAPH_URL` in `.env.local` is currently a Studio *dashboard* URL**
+(`https://thegraph.com/studio/subgraph/verimesh-base-sepolia/`), not a query endpoint, so it CORS-fails
+on every request. The query endpoint is the `https://api.studio.thegraph.com/query/<id>/<name>/<version>`
+form shown after `graph deploy`. The fixture fallback absorbed it — which is the design working — but
+the top bar now says **Unreachable**, so it will not be mistaken for live on stage.
+
+---
+
 ## Handoff · what is left, and what it is waiting on
 
 **All 25 Stream-A tasks are built, typechecked, `pnpm build`-clean and committed.** Three cannot be

@@ -2,8 +2,8 @@
 
 import { useMemo } from "react";
 import { EmptyState, SkeletonRows } from "@/components/ui/Panel";
-import { Dot } from "@/components/ui/Pill";
-import { operatorSwatch, statusSwatch } from "@/lib/palette";
+import { StatusTag } from "@/components/ui/Pill";
+import { NEUTRAL, statusToken } from "@/lib/palette";
 import { useMeshStore } from "@/store/mesh";
 
 export function NodeList() {
@@ -24,7 +24,7 @@ export function NodeList() {
     return (
       <EmptyState
         tone="error"
-        title="mesh unreachable"
+        title="Mesh unreachable"
         hint={linkError ?? "Supabase did not answer."}
       />
     );
@@ -35,60 +35,65 @@ export function NodeList() {
   if (rows.length === 0) {
     return (
       <EmptyState
-        title="no nodes seeded"
-        hint="Run `pnpm --filter @verimesh/agent seed` to populate the mesh."
+        title="No nodes seeded"
+        hint="Run pnpm --filter @verimesh/agent seed to populate the mesh."
       />
     );
   }
 
   return (
     <table className="w-full border-collapse">
-      <thead className="sticky top-0 z-10 bg-panel-raised">
+      <thead className="sticky top-0 z-10 bg-panel">
         <tr className="border-b border-hairline">
-          <Th className="w-[38%]">node</Th>
-          <Th className="w-[16%]">op</Th>
-          <Th className="w-[16%] text-right">load</Th>
-          <Th className="w-[16%] text-right">temp</Th>
-          <Th className="w-[14%] text-right">status</Th>
+          <Th className="w-[34%]">Node</Th>
+          <Th className="w-[14%]">Operator</Th>
+          <Th className="w-[13%] text-right">Load</Th>
+          <Th className="w-[13%] text-right">Temp</Th>
+          <Th className="w-[26%]">Status</Th>
         </tr>
       </thead>
       <tbody>
         {rows.map((node) => {
-          const op = operatorSwatch(node.operator);
-          const st = statusSwatch(node.status);
           const selected = selectedNodeId === node.id;
+          const token = statusToken(node.status);
+          const alarming = token.severity === "danger";
           return (
             <tr
               key={node.id}
               onClick={() => selectNode(selected ? null : node.id)}
-              className={`cursor-pointer border-b border-hairline/50 transition-colors ${
-                selected ? "bg-signal/10" : "hover:bg-panel-raised"
+              className={`row-hover cursor-pointer border-b border-hairline/60 ${
+                selected ? "bg-panel-raised" : ""
               }`}
             >
-              <td className="px-3 py-1.5">
+              <td className="px-3.5 py-2">
                 <div className="flex items-center gap-2">
-                  <Dot color={op.hex} size={7} />
-                  <span className="data text-[12px] text-ink">{node.name}</span>
+                  <span
+                    aria-hidden="true"
+                    className="h-2 w-2 shrink-0 rounded-[2px]"
+                    style={{
+                      background: `var(--${node.operator.toLowerCase()}, ${NEUTRAL.faint})`,
+                    }}
+                  />
+                  <span className="text-[13px] text-ink">{node.name}</span>
                 </div>
               </td>
-              <td className="px-3 py-1.5">
-                <span className="data text-[11px]" style={{ color: op.hex }}>
-                  {node.operator}
-                </span>
+              <td className="px-3.5 py-2 text-[12.5px] text-ink-dim">
+                {node.operator}
               </td>
-              <td className="data px-3 py-1.5 text-right text-[12px] text-ink-dim">
+              <td
+                className="num px-3.5 py-2 text-right text-[12.5px]"
+                style={{ color: alarming ? token.hex : NEUTRAL.dim }}
+              >
                 {(node.metrics.load * 100).toFixed(0)}%
               </td>
-              <td className="data px-3 py-1.5 text-right text-[12px] text-ink-dim">
+              <td
+                className="num px-3.5 py-2 text-right text-[12.5px]"
+                style={{ color: alarming ? token.hex : NEUTRAL.dim }}
+              >
                 {node.metrics.temp.toFixed(1)}°
               </td>
-              <td className="px-3 py-1.5 text-right">
-                <span
-                  className="data text-[10px] tracking-wide uppercase"
-                  style={{ color: st.hex }}
-                >
-                  {node.status === "awaiting_human" ? "human" : node.status}
-                </span>
+              <td className="px-3.5 py-2">
+                <StatusTag status={node.status} />
               </td>
             </tr>
           );
@@ -106,7 +111,9 @@ function Th({
   className?: string;
 }) {
   return (
-    <th className={`panel-label px-3 py-1.5 text-left text-[9px] ${className}`}>
+    <th
+      className={`px-3.5 py-2 text-left text-[11.5px] font-medium text-ink-faint ${className}`}
+    >
       {children}
     </th>
   );

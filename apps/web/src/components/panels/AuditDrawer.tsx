@@ -3,11 +3,11 @@
 import { useCallback, useMemo, useState } from "react";
 import { AUTH_TIER_CODE, distinctNullifiers, type AuthTier } from "@verimesh/shared";
 import { Overlay } from "@/components/ui/Overlay";
-import { Pill } from "@/components/ui/Pill";
-import { EmptyState, SkeletonRows } from "@/components/ui/Panel";
+import { Badge, KeyValue } from "@/components/ui/Pill";
+import { EmptyState, SectionCard, SkeletonRows } from "@/components/ui/Panel";
 import { SourceBadge } from "@/components/ui/SourceBadge";
 import { clock, shortHash } from "@/lib/format";
-import { operatorSwatch, tierSwatch, verdictSwatch } from "@/lib/palette";
+import { NEUTRAL, tierSwatch, verdictSwatch } from "@/lib/palette";
 import {
   DECISION_AUDIT_QUERY,
   REGISTRY_EXPLORER,
@@ -99,17 +99,22 @@ export function AuditDrawer() {
   const txHash = decision?.txHash ?? commit?.chain_tx_hash ?? null;
 
   return (
-    <Overlay onClose={close} labelledBy="audit-drawer-heading" align="bottom" dismissOnBackdrop>
-      <div className="surface animate-rise flex max-h-[86vh] min-h-0 w-full flex-col overflow-hidden rounded-t-lg">
-        <header className="flex shrink-0 items-center gap-3 border-b border-hairline bg-panel-raised px-4 py-2.5">
+    <Overlay
+      onClose={close}
+      labelledBy="audit-drawer-heading"
+      align="bottom"
+      dismissOnBackdrop
+    >
+      <div className="surface elevated animate-rise flex max-h-[88vh] min-h-0 w-full flex-col overflow-hidden rounded-t-xl">
+        <header className="flex shrink-0 items-center gap-3 border-b border-hairline px-5 py-3.5">
           <h2
             id="audit-drawer-heading"
-            className="panel-label text-[11px] tracking-[0.18em] text-ink"
+            className="text-[15px] leading-none font-medium text-ink"
           >
-            audit record
+            Audit record
           </h2>
           {decision ? (
-            <span className="data text-[11px] text-ink-faint">
+            <span className="data text-[12px] text-ink-faint">
               {shortHash(decision.id, 8)}
             </span>
           ) : null}
@@ -117,8 +122,8 @@ export function AuditDrawer() {
           <button
             type="button"
             onClick={close}
-            className="data ml-auto text-[18px] leading-none text-ink-faint transition-colors hover:text-ink"
-            aria-label="close"
+            className="ml-auto rounded px-1 text-[17px] leading-none text-ink-faint transition-colors hover:text-ink"
+            aria-label="Close"
           >
             ×
           </button>
@@ -129,99 +134,94 @@ export function AuditDrawer() {
             <SkeletonRows rows={6} />
           ) : !decision ? (
             <EmptyState
-              title="nothing indexed for this decision yet"
+              title="Nothing indexed for this decision yet"
               hint="The registry event may still be waiting for the subgraph to catch up. Indexing lag is expected — this view is history, not the live path."
             />
           ) : (
-            <div className="grid gap-3 p-3 lg:grid-cols-[1.15fr_1fr]">
-              <div className="flex flex-col gap-3">
-                <Section title="the indexed record · from The Graph">
-                  <div className="grid grid-cols-2 gap-2">
-                    <Field label="node" value={decision.nodeId} />
-                    <Field
-                      label="operator"
-                      value={decision.operator}
-                      tone={operatorSwatch(decision.operator).hex}
-                    />
-                    <Field label="action" value={decision.action} />
-                    <Field
-                      label="verdict"
+            <div className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+              <div className="flex min-w-0 flex-col gap-4">
+                <SectionCard title="The indexed record · from The Graph">
+                  <div className="grid grid-cols-2 gap-x-5 gap-y-3.5">
+                    <KeyValue label="Node" value={decision.nodeId} />
+                    <KeyValue label="Operator" value={decision.operator} />
+                    <KeyValue label="Action" value={decision.action} />
+                    <KeyValue
+                      label="Verdict"
                       value={verdictSwatch(decision.verdict).label}
-                      tone={verdictSwatch(decision.verdict).hex}
+                      tone={
+                        verdictSwatch(decision.verdict).severity === "none"
+                          ? undefined
+                          : verdictSwatch(decision.verdict).hex
+                      }
                     />
-                    <Field
-                      label="auth tier"
-                      value={tier.label}
-                      tone={tier.hex}
-                    />
-                    <Field
-                      label="human authorized"
-                      value={decision.humanAuthorized ? "yes" : "no"}
-                      tone={decision.humanAuthorized ? "#e879f9" : "#34d399"}
+                    <KeyValue label="Auth tier" value={tier.label} />
+                    <KeyValue
+                      label="Human authorized"
+                      value={decision.humanAuthorized ? "Yes" : "No"}
                     />
                   </div>
-                  <span className="data text-[10px] text-ink-faint">
-                    indexed at {clock(Number(decision.ts) * 1000)}
+                  <span className="num text-[11.5px] text-ink-faint">
+                    Indexed at {clock(Number(decision.ts) * 1000)}
                   </span>
-                </Section>
+                </SectionCard>
 
                 {freeze ? (
-                  <Section title="why it froze">
-                    <p className="text-[12.5px] leading-relaxed text-ink">
+                  <SectionCard title="Why it froze">
+                    <p className="text-[13px] leading-relaxed text-ink">
                       {freeze.reason}
                     </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      <Pill color={tier.hex}>
-                        required {freeze.requiredQuorum} distinct human
-                        {freeze.requiredQuorum === 1 ? "" : "s"}
-                      </Pill>
-                    </div>
-                  </Section>
+                    <Badge>
+                      Required {freeze.requiredQuorum} distinct human
+                      {freeze.requiredQuorum === 1 ? "" : "s"}
+                    </Badge>
+                  </SectionCard>
                 ) : null}
 
-                <Section title="✦ who authorized it · distinct signers">
+                <SectionCard title="Who authorized it · distinct signers">
                   {approvals.length === 0 ? (
-                    <p className="data text-[11.5px] text-ink-faint">
-                      no human approvals — this decision was taken autonomously
-                      at {tier.label}
+                    <p className="text-[12.5px] text-ink-faint">
+                      No human approvals — this decision was taken autonomously
+                      at {tier.label}.
                     </p>
                   ) : (
                     <>
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <Pill color={distinct.length >= 2 ? "#e879f9" : "#fbbf24"}>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge glyph={distinct.length >= 2 ? "◉" : "◑"}>
                           {distinct.length} distinct human
                           {distinct.length === 1 ? "" : "s"}
-                        </Pill>
+                        </Badge>
                         {override ? (
-                          <Pill color="#34d399">
-                            resolved {override.chosenAction}
-                          </Pill>
+                          <Badge glyph="✓">
+                            Resolved {override.chosenAction}
+                          </Badge>
                         ) : null}
                       </div>
-                      <ul className="flex flex-col gap-1">
+                      <ul className="flex flex-col gap-1.5">
                         {approvals.map((approval) => (
                           <li
                             key={approval.id}
-                            className="flex flex-col gap-0.5 rounded-sm border border-hairline bg-abyss px-2 py-1.5"
+                            className="flex flex-col gap-1 rounded border border-hairline bg-panel px-2.5 py-2"
                           >
-                            <div className="flex items-baseline gap-2">
-                              <span
-                                className="data text-[11px] font-semibold"
-                                style={{
-                                  color: operatorSwatch(approval.operator).hex,
-                                }}
-                              >
+                            <div className="flex items-baseline gap-2.5">
+                              <span className="flex items-center gap-1.5 text-[12.5px] font-medium text-ink">
+                                <span
+                                  aria-hidden="true"
+                                  className="h-2 w-2 rounded-[2px]"
+                                  style={{
+                                    background: `var(--${approval.operator.toLowerCase()}, ${NEUTRAL.faint})`,
+                                  }}
+                                />
                                 {approval.operator}
                               </span>
-                              <span className="data text-[10px] text-ink-faint">
-                                signer #{approval.approvalIndex + 1}
+                              <span className="text-[11.5px] text-ink-faint">
+                                Signer {approval.approvalIndex + 1}
                               </span>
-                              <span className="data ml-auto text-[10px] text-ink-faint">
+                              <span className="num ml-auto text-[11.5px] text-ink-faint">
                                 {clock(Number(approval.ts) * 1000)}
                               </span>
                             </div>
                             <span
-                              className="data truncate text-[10.5px] text-ink-dim"
+                              className="data truncate text-[11.5px] text-ink-dim"
                               title={approval.worldIdNullifier}
                             >
                               {approval.worldIdNullifier}
@@ -229,73 +229,63 @@ export function AuditDrawer() {
                           </li>
                         ))}
                       </ul>
-                      <p className="text-[10.5px] leading-relaxed text-ink-faint">
+                      <p className="text-[12px] leading-relaxed text-ink-faint">
                         These are World ID nullifiers, not wallets. Two rows here
-                        means two different real humans — that is the claim the
-                        chain enforces with{" "}
+                        means two different real humans — the claim the chain
+                        enforces with{" "}
                         <span className="data">DuplicateNullifier</span>.
                       </p>
                     </>
                   )}
-                </Section>
+                </SectionCard>
               </div>
 
-              <div className="flex flex-col gap-3">
-                <Section title="the immutable payload · 0G Storage">
+              <div className="flex min-w-0 flex-col gap-4">
+                <SectionCard title="The immutable payload · 0G Storage">
                   {zerogRoot ? (
                     <>
-                      <Field label="zerog root" value={zerogRoot} mono wrap />
+                      <KeyValue label="0G root" value={zerogRoot} mono wrap />
                       <a
                         href={zerogBlobUrl(zerogRoot)}
                         target="_blank"
                         rel="noreferrer"
-                        className="data self-start rounded-sm border px-2 py-1 text-[11px] transition-colors"
-                        style={{
-                          borderColor: "#22d3ee55",
-                          background: "#22d3ee12",
-                          color: "#22d3ee",
-                        }}
+                        className="self-start rounded border border-hairline px-2.5 py-1.5 text-[12.5px] text-ink-dim transition-colors hover:border-hairline-bright hover:text-ink"
                       >
-                        open the reasoning blob ↗
+                        Open the reasoning blob ↗
                       </a>
-                      <span className="data text-[10px] text-ink-faint">
+                      <span className="data text-[11px] text-ink-faint">
                         {ZEROG_EXPLORER}
                       </span>
                     </>
                   ) : (
                     <StoreOnZeroG proposalId={proposal?.id ?? null} />
                   )}
-                </Section>
+                </SectionCard>
 
-                <Section title="the on-chain event · Base Sepolia">
+                <SectionCard title="The on-chain event · Base Sepolia">
                   {txHash ? (
                     <>
-                      <Field label="registry tx" value={txHash} mono wrap />
+                      <KeyValue label="Registry tx" value={txHash} mono wrap />
                       <a
                         href={`${REGISTRY_EXPLORER}/tx/${txHash}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="data self-start rounded-sm border px-2 py-1 text-[11px] transition-colors"
-                        style={{
-                          borderColor: "#34d39955",
-                          background: "#34d39912",
-                          color: "#34d399",
-                        }}
+                        className="self-start rounded border border-hairline px-2.5 py-1.5 text-[12.5px] text-ink-dim transition-colors hover:border-hairline-bright hover:text-ink"
                       >
-                        open on Basescan ↗
+                        Open on Basescan ↗
                       </a>
                     </>
                   ) : (
-                    <p className="data text-[11.5px] text-ink-faint">
-                      no registry tx on this record yet
+                    <p className="text-[12.5px] text-ink-faint">
+                      No registry transaction on this record yet.
                     </p>
                   )}
-                  <p className="text-[10.5px] leading-relaxed text-ink-faint">
+                  <p className="text-[12px] leading-relaxed text-ink-faint">
                     The decision record is indexed where The Graph can serve it;
                     the immutable payload lives on 0G, and every indexed row
                     carries its 0G root.
                   </p>
-                </Section>
+                </SectionCard>
 
                 <RawQuery
                   queryText={result?.queryText ?? DECISION_AUDIT_QUERY}
@@ -316,8 +306,8 @@ function StoreOnZeroG({ proposalId }: { proposalId: number | null }) {
 
   if (proposalId === null) {
     return (
-      <p className="data text-[11.5px] text-ink-faint">
-        no 0G root on this indexed record
+      <p className="text-[12.5px] text-ink-faint">
+        No 0G root on this indexed record.
       </p>
     );
   }
@@ -328,7 +318,7 @@ function StoreOnZeroG({ proposalId }: { proposalId: number | null }) {
     try {
       const res = await fetch("/api/zerog/store", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ proposalId }),
       });
       const body = (await res.json()) as {
@@ -338,7 +328,7 @@ function StoreOnZeroG({ proposalId }: { proposalId: number | null }) {
       };
       if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
       setPhase("idle");
-      setDetail(`stored ${body.bytes ?? 0} bytes — root ${body.rootHash}`);
+      setDetail(`Stored ${body.bytes ?? 0} bytes — root ${body.rootHash}`);
     } catch (err) {
       setPhase("error");
       setDetail(err instanceof Error ? err.message : String(err));
@@ -346,27 +336,24 @@ function StoreOnZeroG({ proposalId }: { proposalId: number | null }) {
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <p className="data text-[11.5px] text-ink-faint">
-        no 0G root on this record yet
+    <div className="flex flex-col gap-2">
+      <p className="text-[12.5px] text-ink-faint">
+        No 0G root on this record yet.
       </p>
       <button
         type="button"
         disabled={phase === "busy"}
         onClick={() => void store()}
-        className="data self-start rounded-sm border px-2 py-1 text-[11px] transition-colors disabled:opacity-40"
-        style={{
-          borderColor: "#22d3ee55",
-          background: "#22d3ee12",
-          color: "#22d3ee",
-        }}
+        className="self-start rounded border border-hairline px-2.5 py-1.5 text-[12.5px] text-ink-dim transition-colors hover:border-hairline-bright hover:text-ink disabled:opacity-40"
       >
-        {phase === "busy" ? "uploading to 0G…" : "store the reasoning blob on 0G"}
+        {phase === "busy" ? "Uploading to 0G…" : "Store the reasoning blob on 0G"}
       </button>
       {detail ? (
         <span
-          className="data text-[10.5px] break-all"
-          style={{ color: phase === "error" ? "#f43f5e" : "#34d399" }}
+          className="data text-[11.5px] break-all"
+          style={{
+            color: phase === "error" ? "#d1524f" : "var(--color-ink-dim)",
+          }}
         >
           {detail}
         </span>
@@ -395,72 +382,26 @@ function RawQuery({
   }, []);
 
   return (
-    <section className="flex min-h-0 flex-col gap-1.5 rounded-md border border-hairline bg-abyss p-2.5">
+    <SectionCard title="Run this yourself · any operator can">
       <div className="flex items-center gap-2">
-        <span className="panel-label text-[9px]">
-          run this yourself · any operator can
-        </span>
         <button
           type="button"
           onClick={() => void copy(endpoint, "endpoint")}
-          className="data ml-auto text-[10px] text-ink-faint transition-colors hover:text-ink-dim"
+          className="text-[11.5px] text-ink-faint transition-colors hover:text-ink-dim"
         >
-          {copied === "endpoint" ? "copied" : "copy endpoint"}
+          {copied === "endpoint" ? "Copied" : "Copy endpoint"}
         </button>
         <button
           type="button"
           onClick={() => void copy(queryText, "query")}
-          className="data rounded-sm border border-hairline px-1.5 py-0.5 text-[10px] text-ink-dim transition-colors hover:border-hairline-bright hover:text-ink"
+          className="ml-auto rounded border border-hairline px-2 py-1 text-[11.5px] text-ink-dim transition-colors hover:border-hairline-bright hover:text-ink"
         >
-          {copied === "query" ? "copied ✓" : "copy query"}
+          {copied === "query" ? "Copied ✓" : "Copy query"}
         </button>
       </div>
-      <pre className="scroll-thin data max-h-64 overflow-auto rounded-sm border border-hairline bg-void px-2 py-1.5 text-[10px] leading-relaxed text-ink-dim">
+      <pre className="scroll-thin data max-h-64 overflow-auto rounded border border-hairline bg-panel px-2.5 py-2 text-[11px] leading-relaxed text-ink-dim">
         {queryText.trim()}
       </pre>
-    </section>
-  );
-}
-
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="flex flex-col gap-2 rounded-md border border-hairline bg-abyss p-2.5">
-      <span className="panel-label text-[9px]">{title}</span>
-      {children}
-    </section>
-  );
-}
-
-function Field({
-  label,
-  value,
-  tone,
-  mono = false,
-  wrap = false,
-}: {
-  label: string;
-  value: string;
-  tone?: string;
-  mono?: boolean;
-  wrap?: boolean;
-}) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="panel-label text-[8.5px]">{label}</span>
-      <span
-        className={`text-[12px] font-semibold ${mono ? "data" : "data"} ${
-          wrap ? "break-all" : "truncate"
-        }`}
-        style={{ color: tone ?? "var(--color-ink)" }}
-      >
-        {value}
-      </span>
-    </div>
+    </SectionCard>
   );
 }

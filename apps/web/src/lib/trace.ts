@@ -44,21 +44,22 @@ export interface TraceCycle {
 }
 
 const STEP_LABELS: Record<StepKey, string> = {
-  telemetry: "telemetry",
-  detect: "detect anomaly",
-  history: "get_history",
-  propose: "diagnose + propose",
-  verify: "verify_constraints",
-  resolve: "commit / freeze",
+  telemetry: "Telemetry",
+  detect: "Detect anomaly",
+  history: "Retrieve history",
+  propose: "Diagnose and propose",
+  verify: "Verify constraints",
+  resolve: "Commit or freeze",
 };
 
 const IDLE_HINTS: Record<StepKey, string> = {
-  telemetry: "waiting for the next telemetry window",
-  detect: "deterministic rules — no LLM on this step",
-  history: "will query the subgraph for this node's prior incidents",
-  propose: "the one LLM call, via 0G Compute, with telemetry + history in context",
-  verify: "deterministic projection — VERIFIED / VIOLATION / ESCALATE",
-  resolve: "commits autonomously, or freezes for human authorization",
+  telemetry: "Waiting for the next telemetry window.",
+  detect: "Deterministic rules — no LLM on this step.",
+  history: "Will query the subgraph for this node's prior incidents.",
+  propose:
+    "The one LLM call, via 0G Compute, with telemetry and retrieved history in context.",
+  verify: "Deterministic projection — Verified, Violation or Escalate.",
+  resolve: "Commits autonomously, or freezes for human authorization.",
 };
 
 function matchEvent(events: EventRow[], tokens: string[]): EventRow | null {

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { gql, type GqlResult } from "@/lib/subgraph";
+import { useSubgraphHealth } from "@/store/subgraph";
 
 export interface SubgraphQueryState<T> {
   result: GqlResult<T> | null;
@@ -40,6 +41,12 @@ export function useSubgraphQuery<T>(
       .then((next) => {
         if (cancelled) return;
         setResult(next);
+        useSubgraphHealth.getState().report({
+          source: next.source,
+          error: next.error,
+          ms: next.ms,
+          endpoint: next.endpoint,
+        });
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

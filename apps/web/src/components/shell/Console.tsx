@@ -14,6 +14,7 @@ import { AuditDrawer } from "@/components/panels/AuditDrawer";
 import { useMeshRealtime } from "@/hooks/useMeshRealtime";
 import { subgraphConfigured } from "@/lib/subgraph";
 import { operatorCounts, statusCounts, useMeshStore } from "@/store/mesh";
+import { useSubgraphHealth } from "@/store/subgraph";
 
 export function Console() {
   useMeshRealtime();
@@ -26,6 +27,27 @@ export function Console() {
   const counts = useMemo(() => statusCounts(nodes), [nodes]);
   const ops = useMemo(() => operatorCounts(nodes), [nodes]);
 
+  const graphSource = useSubgraphHealth((s) => s.source);
+  const graphError = useSubgraphHealth((s) => s.error);
+  const graphEndpoint = useSubgraphHealth((s) => s.endpoint);
+
+  const subgraphState =
+    graphSource === "live"
+      ? "live"
+      : graphSource === "fixture"
+        ? graphError
+          ? "error"
+          : "idle"
+        : subgraphConfigured
+          ? "connecting"
+          : "idle";
+
+  const subgraphDetail = graphError
+    ? `${graphEndpoint} — ${graphError}`
+    : graphSource === "fixture"
+      ? "SUBGRAPH_URL is not set — every Graph view is running on a fixture shaped like schema.graphql"
+      : undefined;
+
   return (
     <>
       <div id="verimesh-console" className="flex flex-col bg-void">
@@ -34,19 +56,20 @@ export function Console() {
           linkDetail={linkError ?? undefined}
           statusCounts={counts}
           operatorCounts={ops}
-          subgraphState={subgraphConfigured ? "live" : "idle"}
+          subgraphState={subgraphState}
+          subgraphDetail={subgraphDetail}
         />
 
-        <main className="grid min-h-0 flex-1 gap-2 p-2 grid-cols-[minmax(320px,22vw)_1fr_minmax(360px,24vw)]">
-          <div className="flex min-h-0 flex-col gap-2">
-            <Panel label="reasoning trace" className="flex-[8]">
+        <main className="grid min-h-0 flex-1 grid-cols-[minmax(340px,23vw)_1fr_minmax(380px,25vw)] gap-3 p-3">
+          <div className="flex min-h-0 flex-col gap-3">
+            <Panel label="Reasoning trace" className="flex-[8]">
               <TracePanel />
             </Panel>
             <Panel
-              label="event log"
+              label="Event log"
               className="flex-[4]"
               accessory={
-                <span className="data text-[10px] text-ink-faint">
+                <span className="num text-[12px] text-ink-faint">
                   {events.length}
                 </span>
               }
@@ -55,19 +78,15 @@ export function Console() {
             </Panel>
           </div>
 
-          <Panel label="mesh" scroll={false} accessory={<MeshLegend />}>
+          <Panel label="Mesh" scroll={false} accessory={<MeshLegend />}>
             <MeshViewport />
           </Panel>
 
-          <div className="flex min-h-0 flex-col gap-2">
-            <Panel label="node inspector" className="flex-[6]">
+          <div className="flex min-h-0 flex-col gap-3">
+            <Panel label="Node inspector" className="flex-[6]">
               <NodeInspector />
             </Panel>
-            <Panel
-              label="the graph · indexed history"
-              className="flex-[6]"
-              scroll={false}
-            >
+            <Panel label="Indexed history" className="flex-[6]" scroll={false}>
               <GraphPanel />
             </Panel>
           </div>

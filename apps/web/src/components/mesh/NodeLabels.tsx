@@ -2,7 +2,7 @@
 
 import { Html } from "@react-three/drei";
 import { useMeshStore } from "@/store/mesh";
-import { operatorSwatch, statusSwatch } from "@/lib/palette";
+import { NEUTRAL, statusToken } from "@/lib/palette";
 import { worldPos } from "@/lib/layout";
 
 export function NodeLabels() {
@@ -35,40 +35,48 @@ function NodeLabel({ nodeId }: { nodeId: string }) {
   if (!position) return null;
 
   const [x, y, z] = position.split(",").map(Number);
-  const op = operatorSwatch(operator);
-  const st = statusSwatch(status);
-  const expanded = selected || status !== "healthy";
+  const token = statusToken(status);
+  const detailed = selected || status !== "healthy";
+  const urgent = token.severity === "danger" || token.severity === "notice";
 
   return (
     <Html
-      position={[x, y + 0.72, z]}
+      position={[x, y + 0.62, z]}
       center
       zIndexRange={[20, 0]}
       style={{ pointerEvents: "none", userSelect: "none" }}
     >
-      <div className="flex flex-col items-center gap-0.5 whitespace-nowrap">
+      <div className="flex flex-col items-center gap-1 whitespace-nowrap">
         <span
-          className="data rounded-sm border px-1.5 py-0.5 text-[11px] leading-none font-semibold tracking-wide"
+          className="flex items-center gap-1.5 rounded border px-1.5 py-[3px] text-[11.5px] leading-none"
           style={{
-            color: op.hex,
-            borderColor: `${op.hex}66`,
-            background: "rgba(5,7,13,0.82)",
-            boxShadow: selected ? `0 0 12px ${op.hex}88` : "none",
+            borderColor: selected ? NEUTRAL.lineBright : NEUTRAL.line,
+            background: "rgba(13,13,16,0.9)",
+            color: selected ? NEUTRAL.text : NEUTRAL.dim,
           }}
         >
+          <span
+            aria-hidden="true"
+            className="h-2 w-2 rounded-[2px]"
+            style={{ background: `var(--${operator.toLowerCase()}, ${NEUTRAL.faint})` }}
+          />
           {name}
         </span>
-        {expanded ? (
+
+        {detailed ? (
           <span
-            className="data rounded-sm px-1.5 py-0.5 text-[10px] leading-none tracking-wide"
+            className="flex items-center gap-1.5 rounded border px-1.5 py-[3px] text-[11px] leading-none"
             style={{
-              color: st.hex,
-              background: "rgba(5,7,13,0.9)",
-              border: `1px solid ${st.hex}55`,
+              borderColor: urgent ? `${token.hex}59` : NEUTRAL.line,
+              background: "rgba(13,13,16,0.94)",
+              color: token.severity === "none" ? NEUTRAL.dim : token.hex,
             }}
           >
-            {status === "awaiting_human" ? "AWAITING HUMAN" : status.toUpperCase()}
-            <span className="ml-1.5 text-ink-faint">
+            <span aria-hidden="true" className="text-[10px] leading-none">
+              {token.glyph}
+            </span>
+            {token.label}
+            <span className="num text-ink-faint">
               {load}% · {temp}°
             </span>
           </span>
