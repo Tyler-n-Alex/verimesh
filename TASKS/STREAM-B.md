@@ -95,11 +95,16 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
       `authTier`; store `chain_tx_hash` · 60m · needs: B2.1, B4
 - [ ] **B6.6** Freeze branch — VIOLATION / low confidence → authz policy → collect quorum →
       re-verify → commit · 60m · needs: B5.5, B6.5
-- [ ] **B7.1** Wire **The Graph's Subgraph MCP server** and expose `get_history` as an MCP tool in
-      `services/mcp` (currently a 1-line stub) · 60m · needs: B2.6
-- [ ] **B7.2** Point B6.2's interface at the MCP tool so the agent's step 3 goes through MCP — this
-      is the Graph track's stated narrative ("agent queries indexed data via MCP"), name it in the
-      submission · 30m · needs: B7.1, B6.2
+- [ ] **B7.1** Write a **Verimesh MCP server** in `services/mcp` (currently a 1-line stub) exposing
+      `get_history` over our subgraph's GraphQL endpoint · 45m · needs: B2.6
+      · ⚠️ **The Graph's own `subgraph-mcp` cannot reach our subgraph** — it queries the Graph
+      Network gateway by subgraph ID only, with no arbitrary-endpoint option. Plan §0's "query via
+      The Graph's Subgraph MCP server" is not achievable; ours is. See the `subgraph` skill.
+- [ ] **B7.2** Point B6.2's interface at the MCP tool so the agent's step 3 goes through MCP
+      · 30m · needs: B7.1, B6.2
+- [ ] **B7.3** Write the submission line **accurately**: "a custom MCP server exposing our subgraph
+      as agent-queryable memory" — **not** "we used The Graph's Subgraph MCP server." Judges check
+      · 5m · needs: B7.2
 
 ---
 

@@ -41,7 +41,14 @@ Verimesh-specific wiring and the traps.
    **Consequence:** `B5.1` now hard-blocks `A3.6.1` — there is no "render the widget first" path.
 2. **Subgraph Studio will not accept 0G Chain.** Galileo is not on The Graph's supported-networks
    list. `B2.4`'s "Studio first" was backwards — **local `graph-node` via docker is the primary
-   path.** Pull the docker images now, not at 16:45.
+   path.** Pull the docker images now, not at 16:45. *The subgraph itself is unaffected* — same
+   graph-cli, same manifest, same mappings, same GraphQL. Only the host changes.
+3. **The Graph's own Subgraph MCP server cannot query our subgraph.** `graphops/subgraph-mcp` hits
+   the Graph Network gateway by subgraph ID and has no arbitrary-endpoint option, so plan §0's
+   "query path = The Graph's Subgraph MCP server" is unreachable without publishing to the
+   decentralized network. **`B7` becomes: write our own MCP server** over our GraphQL endpoint
+   (`services/mcp` is already scaffolded for it, ~45m). Submission wording must say *custom MCP
+   server*, not *The Graph's*.
 
 Also: the 0G npm scope is **`@0gfoundation`**, not `@0glabs` as the plan's appendix says.
 

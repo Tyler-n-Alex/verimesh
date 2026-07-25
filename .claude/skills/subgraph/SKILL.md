@@ -178,8 +178,28 @@ Show the raw query text in the audit drawer (`A5.2`). "Any operator can run this
 lands if judges can see the query.
 
 **Agent (`B6.2`, `B7`)** — `get_history` behind one interface. Land it on plain GraphQL to unblock
-the loop, then swap the transport to the **Subgraph MCP server** in `B7.2` and name that in the
-submission — "agent queries indexed data via MCP" is the Graph track's stated narrative.
+the loop, then expose it as an MCP tool in `B7`.
+
+### ⚠️ The Graph's own Subgraph MCP server cannot reach our subgraph
+
+`graphops/subgraph-mcp` queries **only The Graph Network gateway**, by subgraph ID / deployment ID
+/ IPFS hash. It requires `GATEWAY_API_KEY` and exposes `execute_query_by_subgraph_id`,
+`get_schema_by_subgraph_id`, `search_subgraphs_by_keyword` and six others. **There is no config
+option pointing it at an arbitrary or self-hosted GraphQL endpoint.**
+
+So plan §0's "Query path: The Graph's Subgraph MCP server (`get_history` tool)" is **not reachable**
+for our subgraph — not on a local graph-node, and not from a Studio dev endpoint either. It would
+require *publishing* to the decentralized network, which needs a supported chain and GRT curation.
+Out of scope at this deadline.
+
+**What we do instead:** write a small MCP server in `services/mcp` (already scaffolded) exposing
+`get_history` over our subgraph's GraphQL endpoint. Same architecture, same agent-memory story, ~45
+minutes. Say it accurately in the submission: *"a custom MCP server exposing our subgraph as an
+agent-queryable memory tool"* — **not** "we used The Graph's Subgraph MCP server." Judges will
+check, and the custom tool is the better claim anyway: we built the agent-memory interface rather
+than wiring an off-the-shelf one.
+
+`GRAPH_MCP_ENDPOINT` in `.env.example` therefore means *our* MCP server's endpoint, not The Graph's.
 
 ## The invariant that protects the whole design
 
