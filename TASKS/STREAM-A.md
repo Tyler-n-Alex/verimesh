@@ -190,11 +190,24 @@ the endpoint in later. Ask B for a fixture at 15:00 if the spike is still runnin
         renders as structured rows (node · operator · action · verdict · outcome · time);
         **as plain text** → it renders verbatim in a `<pre>`. Both paths already work, so *anything*
         you write shows up — JSON just looks materially better on stage. Nothing else is needed.
-- [ ] **A5.1** **Audit drawer** — click any decision → live GraphQL query → the indexed record,
+- [x] **A5.1** **Audit drawer** — click any decision → live GraphQL query → the indexed record,
       the 0G Storage blob, the registry tx (Basescan link), ✦ the distinct signers and the tier · 60m
-      · needs: A3.5.1
-- [ ] **A5.2** Show the raw GraphQL query text in the drawer, copyable — the "any operator can run
-      this exact query" framing only lands if they can see the query · 20m · needs: A5.1
+      · needs: A3.5.1 · done 16:25
+      - five sections: **the indexed record · from The Graph** · **why it froze** · **✦ who authorized
+        it · distinct signers** · **the immutable payload · 0G Storage** · **the on-chain event ·
+        Base Sepolia**, and the raw query (A5.2).
+      - opens from *any* entry point — the trace's `audit ↗`, a decisions row, a timeline entry, or an
+        authz-ledger row — because `auditTarget` is a tagged union
+        (`{kind:"proposal"}` for a Supabase commit, `{kind:"decision"}` for an indexed row), so both
+        the live path and the trustless path land in the same drawer.
+      - the signers section prints the **full nullifiers**, not truncations, and states the point in
+        words: *"These are World ID nullifiers, not wallets. Two rows here means two different real
+        humans."* The Basescan and 0G links are real anchors, so this is clickable on stage.
+- [x] **A5.2** Show the raw GraphQL query text in the drawer, copyable — the "any operator can run
+      this exact query" framing only lands if they can see the query · 20m · needs: A5.1 · done 16:25
+      - headed **"run this yourself · any operator can"**, showing the exact query *with the variables
+        prepended as a comment* and separate **copy query** / **copy endpoint** buttons. The text comes
+        from the same `queryText` the client actually sent, so it can never drift from what ran.
 
 ---
 
@@ -270,16 +283,44 @@ the endpoint in later. Ask B for a fixture at 15:00 if the spike is still runnin
         focus restore. HeroUI stays installed and its style layer is active; the console's surfaces are
         deliberately hand-built because they are all bespoke data displays, and **the one screen the
         whole World track rests on should not depend on a component fighting its own trigger model.**
-- [ ] **A3.6.4** ✦ **Authz ledger** in the audit views, from the subgraph — per decision: which
+- [x] **A3.6.4** ✦ **Authz ledger** in the audit views, from the subgraph — per decision: which
       distinct nullifiers signed + the tier; per human: remaining override budget · 45m
-      · needs: A3.5.1, B5.7
+      · needs: A3.5.1, B5.7 · done 16:25
+      - lives in the Graph panel's **✦ authz** tab plus the audit drawer's signers section.
+      - **per human:** a pip meter of `overrideCount` against `authzConfig.budgetPerWindow` (3),
+        reading "N of 3 left" and turning amber at 1 / red at 0, from `HumanAuthority` in the subgraph.
+      - **per decision:** the tier plus a **`N distinct humans`** chip computed by lower-casing and
+        de-duplicating the nullifiers rather than trusting `approvalsCollected`, so a mapping bug that
+        double-counted one human would show up here instead of being hidden.
+      - 📌 **for B (B5.7):** this reads `humanAuthorities`/`approvals`/`overrides` straight from the
+        subgraph, so it goes live the moment the mappings index a real `HumanApproval`. Nothing further
+        is needed from you for the *display*; B5.7 remains yours only for *enforcing* the budget in the
+        policy inputs.
 
 ---
 
 ## Sun 01:00 → 04:00 · 0G + finish
 
-- [ ] **B4** *(picked up)* 0G Storage — write the reasoning blob, store `zerog_root`, link it from
-      the audit drawer · 45m · needs: B3
+- [x] **B4** *(picked up)* 0G Storage — write the reasoning blob, store `zerog_root`, link it from
+      the audit drawer · 45m · needs: B3 · done 16:25 · ⚠️ **needs `ZEROG_PRIVATE_KEY` to run**
+      - **it did not actually need B3.** `POST /api/zerog/store {proposalId}` assembles the blob from
+        what is already in Supabase — telemetry window, the cited `get_history`, the proposal, the
+        verdict, and the authorization block (tier, required quorum, operators, reason, and every
+        approval's **normalised** nullifier) — uploads it, then writes `zerog_root` onto both `commits`
+        and `proposals` and logs a `storage` event. When B3 lands, the LLM's raw response just becomes
+        one more field on the proposal row and flows in with no change here.
+      - `GET /api/zerog/blob?root=…` streams the blob **back out of 0G** via `downloadToBlob`, so the
+        drawer's "open the reasoning blob ↗" fetches the real thing rather than pointing at an explorer
+        URL we would be guessing at. The explorer link is kept alongside, overridable with
+        `NEXT_PUBLIC_ZEROG_EXPLORER`.
+      - 🔧 **`zerog` skill corrected:** the storage snippet imports `MemData` but then uses
+        `ZgFile.fromFilePath` — for a blob assembled in memory `MemData` is right and avoids a temp
+        file entirely. `Indexer.upload` also returns a **union** (`{txHash,rootHash,txSeq}` *or*
+        `{txHashes,rootHashes,txSeqs}`) which must be narrowed, and `downloadToBlob` takes an
+        **options object** (`{proof:true}`), not the positional boolean `download` takes. Skill updated.
+      - 🚨 **BLOCKED on a funded 0G wallet, not on code:** `ZEROG_PRIVATE_KEY` is empty in `.env.local`,
+        so the route returns a clean `503 missing ZEROG_PRIVATE_KEY` instead of uploading. Per the
+        skill, the faucet caps ~0.1 OG/day/wallet — **claim it early.**
 - [ ] **A6.1** Empty / loading / error states everywhere. A blank panel during the demo reads as
       broken · 45m
 - [ ] **A6.2** Full pass on the demo laptop at demo resolution, projector-legible text · 30m

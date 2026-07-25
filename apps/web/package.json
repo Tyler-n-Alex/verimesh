@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@0gfoundation/0g-storage-ts-sdk": "^1.2.10",
     "@heroui/react": "^3.2.2",
     "@heroui/styles": "^3.2.2",
     "@react-three/drei": "^10.7.7",
@@ -18,6 +19,7 @@
     "@verimesh/shared": "workspace:*",
     "@worldcoin/idkit": "^4.2.1",
     "@worldcoin/idkit-core": "^4.2.2",
+    "ethers": "^6.17.0",
     "next": "15.5.21",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

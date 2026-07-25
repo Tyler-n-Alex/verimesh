@@ -9,6 +9,7 @@ import { EventLog } from "@/components/panels/EventLog";
 import { NodeInspector } from "@/components/panels/NodeInspector";
 import { GraphPanel } from "@/components/panels/GraphPanel";
 import { FreezeModal } from "@/components/panels/FreezeModal";
+import { AuditDrawer } from "@/components/panels/AuditDrawer";
 import { useMeshRealtime } from "@/hooks/useMeshRealtime";
 import { subgraphConfigured } from "@/lib/subgraph";
 import { operatorCounts, statusCounts, useMeshStore } from "@/store/mesh";
@@ -66,6 +67,7 @@ export function Console() {
         </div>
       </main>
 
+      <AuditDrawer />
       <FreezeModal />
     </div>
   );
