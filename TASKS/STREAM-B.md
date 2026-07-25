@@ -54,6 +54,35 @@ still listed here because they are your dependencies; tick them when the new own
 > end-to-end (B5.1/B5.2 confirmed live) — it just needs an actual phone scan to complete, which I
 > can't fabricate.
 
+> **B, 00:30 — the freeze branch is wired end to end, and four things were silently broken.**
+> Everything below was found by reading the live DB (`nodes`, `human_gates`, `human_approvals`,
+> `verdicts`) rather than by reasoning about the code, and each one would have failed on stage.
+>
+> 1. **The gate could never resolve.** `/api/worldid/verify` sets `human_gates.status` to
+>    `authorized`; `pollGateSatisfaction` only ever queried `pending` and `processResolvedGates`
+>    only `resolved`. So the moment the final scan landed the gate left every query the agent
+>    makes and **the commit never happened** — no `resolveOverride`, no `Committed`, no tx. The UI
+>    would have shown both slots filled and then simply stopped. `pollGateSatisfaction` now polls
+>    `pending` **and** `authorized`.
+> 2. **The verify route hand-rolled the policy and assigned `operator: "unenrolled"`.** With the
+>    allowlist empty, `eligible` and `enrolledFor` are both empty, so every signer was recorded as
+>    `unenrolled` — and `coversRequiredOperators(["opA"], [unenrolled])` is `false`, so even the
+>    quorum arithmetic could not have passed. There is a real row in the DB proving it: gate 10,
+>    one approval, operator `unenrolled`, still `pending`. The route now calls C's `checkApproval`
+>    and, while self-enrolment is on, assigns the first unfilled **required** operator.
+> 3. **Every live verdict was `ESCALATE`.** Three consecutive proposals on `node-07` in the DB, all
+>    `THROTTLE_NODE cannot be verified — device-s22 has no bounds in genio_blueprint.json`.
+>    `device-s22` (+ its two edges) is now in the blueprint, so the verifier can project it —
+>    see the note under B8.1.
+> 4. **The loop re-gated a node it had already frozen.** `detectAnomaly` skipped `offline` and
+>    `isolated` but not `awaiting_human`, so it re-proposed every 8s while a human was deciding —
+>    gates 8, 9 and 10 are the same incident three times, with three `Frozen` txs. Now skipped.
+>
+> ⚠️ **Those three stale `pending` gates are still in the DB.** The freeze modal opens on the newest
+> pending gate, so the UI will pop one on load until they are closed. They cannot resolve (operator
+> `unenrolled`), so close them before rehearsing:
+> `update human_gates set status = 'cancelled' where status = 'pending';`
+
 Order below is the order to do it in. B2 starts early and runs in parallel with everything.
 
 ---
@@ -160,16 +189,23 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
       check, duplicate-nullifier rejection, distinct-quorum satisfaction, per-gate operator
       coverage — reviewed the code, did not exercise it, since that needs a real IDKit proof from
       an actual scan (phone or the World ID Simulator), which is a human step I can't substitute for
-- [ ] **B5.2** Valid proof → record a `HumanApproval` (nullifier + enrolled operator) against the
-      open `human_gate` · 45m · needs: B5.1, H0.5
-- [ ] **B5.3** Wire C's `authz.ts` into the freeze branch: verdict + projected blast radius →
-      `AuthorizationRequirement` · 30m · needs: C3 · **C3 is done — `requireAuthorization(verdict,
-      affectedOperators(verdict), action, authzConfig, { incidentCount, overrideCounts })`.
-      `affectedOperators` comes from `@verimesh/verifier`; do not diff `projected` yourself, the
-      blast radius is only meaningful against the do-nothing counterfactual, which the verifier
-      already computed. `requirement.reason` is written to be shown verbatim in the freeze modal**
+- [x] **B5.2** Valid proof → record a `HumanApproval` (nullifier + enrolled operator) against the
+      open `human_gate` · 45m · needs: B5.1, H0.5 · done 00:30 · the row is written by
+      `/api/worldid/verify` **after** C's `checkApproval` accepts it, not before — the canonical
+      nullifier, the operator the signer is entitled to, and the chosen action
+- [x] **B5.3** Wire C's `authz.ts` into the freeze branch: verdict + projected blast radius →
+      `AuthorizationRequirement` · 30m · needs: C3 · done 00:30 · `runCycle` calls
+      `requireAuthorization(verdict, affectedOperators(verdict), action, authzConfig, ctx)` and
+      **persists the requirement onto the gate row**; `pollGateSatisfaction` now reads it back with
+      `gateRequirement(gate)` instead of re-deriving it from a fabricated verdict, which is what it
+      used to do — that old call passed `verdict: "VIOLATION_TRIGGERED"` and a hardcoded
+      `ISOLATE_NODE` and then overwrote all three fields anyway
 - [ ] **B5.4** **T1 end-to-end** — single human, allowlist checked, gate resolves, commit proceeds
-      · 45m · needs: B5.2, B5.3
+      · 45m · needs: B5.2, B5.3 · **code path complete and green headless** —
+      `pnpm --filter @verimesh/agent run-scenario recurring_fault --auto-approve` walks
+      detect → propose → verify → freeze → approve → resolve → `resolveOverride` → `Committed`.
+      **Left unticked deliberately: I have not watched a real World ID scan drive it.** One live
+      scan on `recurring_fault` closes this
 > **C, 21:00 — a definition of done for `B5.5`/`B5.6`/`B5.7`, so nobody has to take it on faith.**
 > One command, from the repo root:
 >
@@ -201,15 +237,38 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
 - [ ] **B5.5** **T2 quorum** — gate stays open until it holds the required *distinct* nullifiers,
       one per affected operator; **reject a repeat nullifier**; emit `HumanApproval` per accepted
       signer + `OverrideResolved` on resolution · 90m · needs: B5.4 · **protect this — it is the World edge**
+      · **code complete 00:30, needs two real scans to tick.** The gate now stays open until
+      `resolveGate` accepts it, and **only the approvals the policy accepted reach the chain** —
+      `processResolvedGates` passes `resolution.accepted`, not every row, so a rejected signer can
+      never appear in a `HumanApproval` event. Distinctness is refused in four places now: the
+      policy, the unique index, `revert DuplicateNullifier`, and the freeze modal's slot map
+      · headless proof: `run-scenario ambiguous_cascade --auto-approve` (two simulated signers)
 - [ ] **B5.6** Enrol both World ID identities (2 phones, or 1 phone + the **World ID Simulator**)
       into `authz_config.json`, one per operator · 20m · **do this early, not at 4am** · unblocks: B5.5
-- [ ] **B5.7** ✦ Subgraph-fed policy inputs (plan §9 B5 stretch, §1D) — before opening a gate, query
+      · **the tooling is done 00:30, the two nullifiers are not** — I cannot fabricate them:
+      ```
+      pnpm --filter @verimesh/agent enrol --list
+      pnpm --filter @verimesh/agent enrol opA 0x…      # phone 1
+      pnpm --filter @verimesh/agent enrol opB 0x…      # phone 2 / the World ID Simulator
+      ```
+      Get each nullifier by scanning **with no gate open**: `POST /api/worldid/verify` with only
+      `{ idkitResponse }` returns the canonical form and records nothing. The CLI normalises,
+      refuses a malformed value, warns if one human is enrolled to two operators (they could then
+      fill a T2 on their own), and prints that the self-enrolment bypass switches off the moment
+      the arrays are non-empty. **Restart `next dev` afterwards** — the JSON is imported at load
+- [x] **B5.7** ✦ Subgraph-fed policy inputs (plan §9 B5 stretch, §1D) — before opening a gate, query
       the subgraph over **plain GraphQL** (not the agent's MCP tool — the one-LLM-decision invariant
       must hold) for: (a) the node's incident count → escalate the tier for a repeat offender,
       (b) each signer's recent override count → enforce `budgetPerWindow` · 60m · needs: B5.5, B2.6, C3
-      · **the entities exist as of B2.3:** `nodeHistories(where: { nodeId: $nodeId }) { incidentCount }`
-      and `humanAuthorities(where: { worldIdNullifier: $n }) { overrideCount }`. Feed them in as the
-      `AuthzContext` — the policy is pure and will not fetch anything itself
+      · done 00:30 · (a) was already live in `runCycle`. (b) is now real in both places it matters:
+      **`/api/worldid/verify` queries `humanAuthorities(worldIdNullifier_in: [$n]) { overrideCount }`
+      for the scanning human and passes it to `checkApproval`, so a signer over budget is refused at
+      the moment of the scan** with `BUDGET_EXCEEDED`; and the agent passes the collected nullifiers
+      into `fetchAuthzContext` before `resolveGate`, so an over-budget signature cannot resolve a
+      gate either. The response carries `overrideCount`, `budgetPerWindow` and `budgetSource`
+      · ⚠️ **if the subgraph is unreachable the budget fails open** (`budgetSource: "unavailable"`)
+      — refusing a legitimate human because a query timed out is the worse failure on stage, but it
+      does mean the honest claim is "enforced against the indexed count", not "unconditionally"
 
 ---
 
@@ -241,10 +300,16 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
       `chain_tx_hash`. The `zerogRoot` is what links the indexed row back to 0G — do not drop it
       · 60m · needs: B2.1, B4 · done 20:19 · `loop.ts`'s `finalizeCommit` — Supabase write, registry
       commit (B2.1 deployed) and 0G Storage upload (root hash confirmed live) all funded and working
-- [ ] **B6.6** Freeze branch — VIOLATION / low confidence → authz policy → collect quorum →
+- [x] **B6.6** Freeze branch — VIOLATION / low confidence → authz policy → collect quorum →
       re-verify → commit · 60m · needs: B5.5, B6.5 · code done in `loop.ts`'s `openHumanGate` +
-      `pollGateSatisfaction` + `processResolvedGates` · **BLOCKED on B5.5/B5.6** — no real World ID
-      proofs to collect yet
+      `pollGateSatisfaction` + `processResolvedGates` · **done 00:30 — the branch now actually
+      closes.** The three fixes that were missing: the `authorized` status is polled, the
+      requirement is read from the gate row instead of re-derived, and `resolveGate` (not
+      `isSatisfied`) decides — so a signer who is on nobody's allowlist cannot release a gate, which
+      is the hole C flagged. `processResolvedGates` re-checks before committing and **puts a gate
+      back to `pending` with a `reject` event if the policy refuses it**, rather than committing on
+      a stale resolution. A node in `awaiting_human` is no longer re-detected, so one incident opens
+      exactly one gate
 - [x] **B7.1** Write a **Verimesh MCP server** in `services/mcp` (currently a 1-line stub) exposing
       `get_history` over our subgraph's GraphQL endpoint · 45m · needs: B2.6
       · ⚠️ **The Graph's own `subgraph-mcp` cannot reach our subgraph** — it queries the Graph
@@ -264,13 +329,47 @@ New toolchain, hard gate. **G2 is 17:00 and it is hard.** Do not blow through it
 
 ## Sun 02:00 → 06:00 · harden
 
-- [ ] **B8.1** Headless scenario runner — `ambiguous_cascade` and `recurring_fault` run start to
+- [x] **B8.1** Headless scenario runner — `ambiguous_cascade` and `recurring_fault` run start to
       finish with no human at the keyboard except the World ID scans · 60m · needs: C2, B6.6
       · **C2 is done — `SCENARIOS` / `scenarioById(id)` from `@verimesh/verifier` carry the fault
       patches, the proposal, the history context and the expected verdict/tier, so you can drive the
       loop from them instead of hand-injecting. `runAllScenarios()` runs the deterministic half.**
       ⚠️ the cascade's offline neighbour is **`node-11`**, not node-12 — see the correction in
       `STREAM-C.md`
+      · done 00:30 · `pnpm --filter @verimesh/agent run-scenario <id> [--auto-approve] [--timeout 300]`
+      · it injects, then waits on the **real** loop and prints a PASS/FAIL line per stage — stack,
+      inject, detect+propose, verify, freeze, authorize, commit, on-chain, 0G storage — with the
+      Basescan URL and the `zerogRoot`, and exits non-zero on the first red. Without
+      `--auto-approve` it blocks on genuine scans and tells you how many are outstanding; with it,
+      it fills the slots from simulated signers (refused unless `ALLOW_SIMULATED_APPROVALS=true`,
+      and every such approval is written into `events` as **SIMULATED … not a World ID scan** so it
+      can never be mistaken for the real thing on a replay)
+      · **Two things had to be fixed before this could ever have worked:**
+      1. **The scenario faults could not trigger the detector.** `detectAnomaly` required
+         `temp > 85`; the cascade injects `node-07` at **78 °C**, and at load 0.88 / 210 W the
+         thermal model settles at **82.9 °C** — it can never reach 85, so the loop would have sat
+         idle through the whole scenario. `pnpm scenario` also called `setFaults`, which is
+         module state **in its own process** and never reached the running simulator.
+      2. **`temp > 85` is `T_max`, so anything it could detect was already breaching** — that
+         violation lands in the do-nothing baseline too, which makes it `preExisting`, which makes
+         every verdict `ESCALATE`. `VERIFIED` was unreachable on a live cycle, so `benign_spike`'s
+         T0 beat and `recurring_fault`'s "VERIFIED but T1 because history" beat were both dead.
+      Detection is now: past the **warn** line **and** the blueprint's own thermal equilibrium sits
+      over the ceiling — deterministic, no LLM, and it fires *before* the breach. Injection drives
+      the node's power so that equilibrium really is above the ceiling (`node-07` → 301 W, settles
+      at 89 °C, starts at 78 °C), so the fault **holds across simulator ticks instead of decaying**.
+      Verified offline against all three scenarios — detect fires, and verdict / violating node /
+      blast radius / tier / quorum come out exactly as C's `expect` block says:
+      cascade `VIOLATION_TRIGGERED` on `node-12`, opA+opB, **T2 q2** · recurring `VERIFIED`, opA,
+      **T1 q1** · benign `VERIFIED`, opA, **T0 q0**
+      · ⚠️ **`device-s22` had to be added to `genio_blueprint.json`** (with its two edges) for any of
+      this to verify — see the blocker note. Its bounds there are rig-like on purpose: they are what
+      the *verifier* projects against. The phone's real thresholds (`T_max 40`, `L_max 0.28`) stay in
+      `classifyDevice`, where its status comes from, and are unchanged. The simulator now skips
+      `kind = 'device'` rows so it cannot overwrite the phone's own telemetry, and `seed` carries the
+      device + its edges, so **`pnpm seed` no longer deletes the cross-operator link** — the trap at
+      the top of the run sheet is gone (`POST /api/device/register` is still correct, just no longer
+      load-bearing)
 - [x] **B8.2** Retry/timeout on every network call (0G broker, RPC, subgraph). One flaky call must
       not kill the demo · 45m · done 19:57 · `packages/chain/src/retry.ts`'s `withRetry`/`withTimeout`
       cover the 0G broker (`llm.ts`), 0G Storage (`storage.ts`) and subgraph GraphQL (`subgraph.ts`)
