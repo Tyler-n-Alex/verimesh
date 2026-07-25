@@ -15,6 +15,7 @@ import {
   getHistory,
   proposeAction,
   registryFromEnv,
+  resolveOverride,
   storageFromEnv,
   toHistoryEntries,
   uploadBlob,
@@ -164,16 +165,15 @@ async function finalizeCommit(
   let chainTxHash: string | undefined;
 
   if (registry && approvals.length > 0) {
-    chainTxHash = await commitDecision(registry, {
+    await resolveOverride(registry, {
       id: `proposal-${proposalId}`,
-      nodeId: proposal.node_id ?? "",
-      operator: node?.operator_id ?? "",
-      action: appliedAction,
-      verdict: verdict?.verdict ?? "VERIFIED",
-      authTier,
-      zerogRoot,
+      chosenAction: appliedAction,
+      nullifiers: approvals.map((a) => a.nullifier),
+      operators: approvals.map((a) => a.operator),
     });
-  } else if (registry) {
+  }
+
+  if (registry) {
     chainTxHash = await commitDecision(registry, {
       id: `proposal-${proposalId}`,
       nodeId: proposal.node_id ?? "",
