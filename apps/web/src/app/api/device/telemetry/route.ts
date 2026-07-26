@@ -48,8 +48,27 @@ interface Directive {
   ts: number;
 }
 
+const DIRECTIVE_POLL_MS = Number(process.env.DEVICE_DIRECTIVE_POLL_MS ?? 6000);
+const directiveCache = new Map<
+  string,
+  { at: number; value: Directive | null }
+>();
+
 async function pendingDirective(
-  supabase: ReturnType<typeof getSupabaseAdmin>,
+  supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  nodeId: string,
+  now: number
+): Promise<Directive | null> {
+  const cached = directiveCache.get(nodeId);
+  if (cached && now - cached.at < DIRECTIVE_POLL_MS) return cached.value;
+
+  const found = await lookupDirective(supabase, nodeId, now);
+  directiveCache.set(nodeId, { at: now, value: found });
+  return found;
+}
+
+async function lookupDirective(
+  supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
   nodeId: string,
   now: number
 ): Promise<Directive | null> {
