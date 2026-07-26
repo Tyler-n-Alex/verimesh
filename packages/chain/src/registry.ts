@@ -5,7 +5,19 @@ import { ethers } from "ethers";
 import { AUTH_TIER_CODE, type AuthTier } from "@verimesh/shared";
 import { withTimeout } from "./retry";
 
-const CHAIN_CALL_TIMEOUT_MS = 30_000;
+const CHAIN_CALL_TIMEOUT_MS = Number(
+  process.env.CHAIN_CALL_TIMEOUT_MS ?? 120_000
+);
+
+function chainFailure(label: string) {
+  return (err: unknown): undefined => {
+    console.error(
+      `[chain] ${label} did not land — the decision continues without it:`,
+      err instanceof Error ? err.message : err
+    );
+    return undefined;
+  };
+}
 
 let queue = Promise.resolve();
 
@@ -75,7 +87,7 @@ export async function commitDecision(
       return receipt?.hash as string | undefined;
     }),
     CHAIN_CALL_TIMEOUT_MS
-  ).catch(() => undefined);
+  ).catch(chainFailure("commitDecision"));
 }
 
 export interface FreezeParams {
@@ -109,7 +121,7 @@ export async function freezeNode(
       return receipt?.hash as string | undefined;
     }),
     CHAIN_CALL_TIMEOUT_MS
-  ).catch(() => undefined);
+  ).catch(chainFailure("freezeNode"));
 }
 
 export interface ResolveParams {
@@ -144,7 +156,7 @@ export async function resolveOverride(
       return receipt?.hash as string | undefined;
     }),
     CHAIN_CALL_TIMEOUT_MS
-  ).catch(() => undefined);
+  ).catch(chainFailure("resolveOverride"));
 }
 
 export function registryFromEnv(): RegistryConfig | null {

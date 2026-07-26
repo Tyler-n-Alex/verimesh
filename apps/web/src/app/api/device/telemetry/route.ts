@@ -39,6 +39,48 @@ function finite(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+const SHED_ACTIONS = new Set(["THROTTLE_NODE", "ISOLATE_NODE"]);
+const DIRECTIVE_TTL_MS = Number(process.env.DEVICE_DIRECTIVE_TTL_MS ?? 120_000);
+
+interface Directive {
+  action: string;
+  proposalId: number;
+  ts: number;
+}
+
+async function pendingDirective(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  nodeId: string,
+  now: number
+): Promise<Directive | null> {
+  const { data: proposals } = await supabase
+    .from("proposals")
+    .select("id")
+    .eq("node_id", nodeId)
+    .gte("ts", now - DIRECTIVE_TTL_MS);
+
+  const ids = (proposals ?? []).map((row) => row.id as number);
+  if (ids.length === 0) return null;
+
+  const { data: commits } = await supabase
+    .from("commits")
+    .select("proposal_id,applied_action,ts")
+    .in("proposal_id", ids)
+    .order("ts", { ascending: false })
+    .limit(1);
+
+  const commit = (commits ?? [])[0];
+  if (!commit) return null;
+  if (!SHED_ACTIONS.has(commit.applied_action as string)) return null;
+  if (now - Number(commit.ts) > DIRECTIVE_TTL_MS) return null;
+
+  return {
+    action: commit.applied_action as string,
+    proposalId: commit.proposal_id as number,
+    ts: Number(commit.ts),
+  };
+}
+
 export async function POST(request: Request) {
   const denied = authorizeDevice(request);
   if (denied) {
@@ -171,6 +213,8 @@ export async function POST(request: Request) {
     });
   }
 
+  const directive = await pendingDirective(supabase, nodeId, ts);
+
   return NextResponse.json({
     ok: true,
     nodeId,
@@ -181,5 +225,6 @@ export async function POST(request: Request) {
     held: holdStatus,
     bounds: DEVICE_BOUNDS,
     reasons: classification.reasons,
+    directive,
   });
 }

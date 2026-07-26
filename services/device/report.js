@@ -18,6 +18,38 @@ const LOAD_SOURCE = (process.env.VERIMESH_LOAD_SOURCE || "auto").toLowerCase();
 // Measured on an S22 Ultra: 20ms window gave 1.9% idle vs 0.4% loaded (noise),
 // 200ms gave 0.1% idle vs 52.3% loaded.
 const PROBE_MS = Number(process.env.VERIMESH_PROBE_MS || 200);
+// The agent's decision reaches the handset on the telemetry response. Obeying
+// it is what makes THROTTLE_NODE an actuator rather than a note in a database.
+const OBEY_DIRECTIVES = process.env.VERIMESH_OBEY_DIRECTIVES !== "false";
+const LOAD_PROCESS_PATTERN = process.env.VERIMESH_LOAD_PROCESS || "heat.js";
+let lastDirectiveId = null;
+
+function killLoadGenerators() {
+  let killed = 0;
+  let pids;
+  try {
+    pids = fs.readdirSync("/proc");
+  } catch {
+    return 0;
+  }
+  for (const entry of pids) {
+    if (!/^\d+$/.test(entry)) continue;
+    const pid = Number(entry);
+    if (pid === process.pid) continue;
+    let cmdline;
+    try {
+      cmdline = fs.readFileSync(`/proc/${entry}/cmdline`, "utf8");
+    } catch {
+      continue;
+    }
+    if (!cmdline.includes(LOAD_PROCESS_PATTERN)) continue;
+    try {
+      process.kill(pid, "SIGTERM");
+      killed++;
+    } catch {}
+  }
+  return killed;
+}
 const FETCH_TIMEOUT_MS = Number(process.env.VERIMESH_FETCH_TIMEOUT_MS || 4000);
 const BATTERY_TIMEOUT_MS = Number(
   process.env.VERIMESH_BATTERY_TIMEOUT_MS || 8000
@@ -414,6 +446,21 @@ async function runTick() {
       `-> ${parsed.status}`,
     ];
     console.log(bits.join("  "));
+
+    const directive = parsed.directive;
+    if (
+      OBEY_DIRECTIVES &&
+      directive &&
+      directive.proposalId !== lastDirectiveId
+    ) {
+      lastDirectiveId = directive.proposalId;
+      const killed = killLoadGenerators();
+      console.log(
+        killed > 0
+          ? `   ${directive.action} from proposal ${directive.proposalId}: stopped ${killed} load generator(s)`
+          : `   ${directive.action} from proposal ${directive.proposalId}: nothing to stop`
+      );
+    }
   } catch (err) {
     failures++;
     console.error(`ingest failed (${failures}): ${err.message}`);

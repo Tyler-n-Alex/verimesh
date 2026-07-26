@@ -6,6 +6,10 @@ import {
 } from "@verimesh/shared";
 import { equilibriumTemp } from "./thermal";
 
+const DEVICE_NODE_ID = process.env.NEXT_PUBLIC_DEVICE_NODE_ID ?? "device-s22";
+const DEVICE_L_MAX = Number(process.env.DEVICE_L_MAX ?? 0.28);
+const DEVICE_DETECTION = process.env.DEVICE_CONTENTION_DETECTION === "true";
+
 export type DetectionResult =
   | { kind: "NO_OP" }
   | { kind: "anomaly"; nodeId: string; operator: string; reason: string };
@@ -17,6 +21,18 @@ export function detectAnomaly(state: GridState): DetectionResult {
       node.status === "isolated" ||
       node.status === "awaiting_human"
     ) {
+      continue;
+    }
+
+    if (node.id === DEVICE_NODE_ID && DEVICE_DETECTION) {
+      if (node.metrics.load > DEVICE_L_MAX) {
+        return {
+          kind: "anomaly",
+          nodeId: node.id,
+          operator: node.operator,
+          reason: `${node.id} is oversubscribed — CPU contention ${(node.metrics.load * 100).toFixed(0)}% is over its ${(DEVICE_L_MAX * 100).toFixed(0)}% ceiling, so work is queueing behind the scheduler`,
+        };
+      }
       continue;
     }
 

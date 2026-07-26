@@ -1,3 +1,4 @@
+import { basename } from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { blueprint } from "@verimesh/shared";
 
@@ -23,7 +24,7 @@ const baseMetrics = {
 
 const DEVICE_NODE_ID = process.env.NEXT_PUBLIC_DEVICE_NODE_ID ?? "device-s22";
 
-async function seed() {
+export async function seed() {
   const ts = Date.now();
 
   const nodes = blueprint.nodes.map((n) => ({
@@ -92,7 +93,9 @@ async function seed() {
   console.log(`seeded ${nodes.length} nodes, ${edges.length} edges`);
 }
 
-seed().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (basename(process.argv[1] ?? "") === "seed.ts") {
+  seed().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

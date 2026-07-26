@@ -3,6 +3,7 @@
 import { Html } from "@react-three/drei";
 import { useMeshStore } from "@/store/mesh";
 import { NEUTRAL, statusToken } from "@/lib/palette";
+import { nodeActivity } from "@/lib/trace";
 import { worldPos } from "@/lib/layout";
 import { isDeviceStale } from "@/lib/device";
 import { useNow } from "@/hooks/useNow";
@@ -39,14 +40,18 @@ function NodeLabel({ nodeId }: { nodeId: string }) {
     (s) => s.nodes[nodeId]?.deviceLabel ?? s.nodes[nodeId]?.name ?? nodeId
   );
   const lastSeenAt = useMeshStore((s) => s.nodes[nodeId]?.lastSeenAt ?? null);
+  const activity = useMeshStore((s) => nodeActivity(s, nodeId));
   const now = useNow(isDevice ? 1000 : 60000);
 
   if (!position) return null;
 
   const [x, y, z] = position.split(",").map(Number);
   const token = statusToken(status);
-  const detailed = selected || status !== "healthy";
-  const urgent = token.severity === "danger" || token.severity === "notice";
+  const detailed = selected || status !== "healthy" || activity !== null;
+  const urgent =
+    token.severity === "danger" ||
+    token.severity === "notice" ||
+    activity !== null;
   const stale = isDevice ? isDeviceStale(lastSeenAt, now) : false;
 
   return (
@@ -83,10 +88,13 @@ function NodeLabel({ nodeId }: { nodeId: string }) {
               color: token.severity === "none" ? NEUTRAL.dim : token.hex,
             }}
           >
-            <span aria-hidden="true" className="text-[10px] leading-none">
-              {token.glyph}
+            <span
+              aria-hidden="true"
+              className={`text-[10px] leading-none ${activity ? "animate-attention" : ""}`}
+            >
+              {activity ? "◴" : token.glyph}
             </span>
-            {token.label}
+            {activity ?? token.label}
             <span className="num text-ink-faint">
               {load}% · {temp}°
             </span>

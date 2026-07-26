@@ -1,9 +1,15 @@
 {
   "operators": {
-    "opA": [],
-    "opB": [],
-    "opC": []
+    "opA": [
+      "0x13cb8912b798be40814969909773b331f81404353d282b2a0fd8eaa8dbb1f6b6"
+    ],
+    "opB": [
+      "0x78000ff8c7927a9e8e965137f32957ce60d69ddf7552f0795da5a6e3a3901184"
+    ],
+    "opC": [
+      "0x17b05394b29b25452040792256ee72d64e3148836d533bb3fc8a43ed9ba75202"
+    ]
   },
-  "budgetPerWindow": 3,
+  "budgetPerWindow": 25,
   "windowMs": 3600000
 }

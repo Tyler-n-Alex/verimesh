@@ -41,6 +41,11 @@ async function gateRecordsByChainId(): Promise<Map<string, GateRecord>> {
 }
 
 const RPC_MAX_BLOCK_RANGE = 1900;
+const RPC_MAX_ATTEMPTS = 7;
+const RPC_BACKOFF_BASE_MS = 600;
+const RPC_BACKOFF_MAX_MS = 15_000;
+const RPC_BACKOFF_JITTER_MS = 250;
+const RPC_CHUNK_PACE_MS = Number(process.env.REGISTRY_RPC_PACE_MS ?? 120);
 
 const EVENT_ABI = [
   "event Committed(bytes32 indexed id, string nodeId, string operator, string action, string verdict, uint8 authTier, bytes32 zerogRoot, uint256 ts)",
@@ -62,6 +67,47 @@ function argValue(flag: string): string | undefined {
   return process.argv[index + 1];
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRateLimited(err: unknown): boolean {
+  const seen = new Set<unknown>();
+  const walk = (value: unknown): boolean => {
+    if (!value || typeof value !== "object" || seen.has(value)) return false;
+    seen.add(value);
+    const record = value as { code?: unknown; message?: unknown; error?: unknown; info?: unknown };
+    if (record.code === -32016 || record.code === 429) return true;
+    if (
+      typeof record.message === "string" &&
+      /rate limit|too many requests/i.test(record.message)
+    ) {
+      return true;
+    }
+    return walk(record.error) || walk(record.info);
+  };
+  return walk(err);
+}
+
+async function withRateLimitRetry<T>(
+  label: string,
+  attempt: () => Promise<T>
+): Promise<T> {
+  let delay = RPC_BACKOFF_BASE_MS;
+  for (let tries = 1; ; tries += 1) {
+    try {
+      return await attempt();
+    } catch (err) {
+      if (!isRateLimited(err) || tries >= RPC_MAX_ATTEMPTS) throw err;
+      console.error(
+        `  rate limited on ${label}, retry ${tries}/${RPC_MAX_ATTEMPTS - 1} in ${Math.round(delay)}ms`
+      );
+      await sleep(delay + Math.random() * RPC_BACKOFF_JITTER_MS);
+      delay = Math.min(delay * 2, RPC_BACKOFF_MAX_MS);
+    }
+  }
+}
+
 async function collect(
   registry: ethers.Contract,
   name: string,
@@ -69,12 +115,14 @@ async function collect(
   head: number
 ): Promise<ethers.EventLog[]> {
   const out: ethers.EventLog[] = [];
+  let first = true;
   for (let start = from; start <= head; start += RPC_MAX_BLOCK_RANGE) {
     const end = Math.min(start + RPC_MAX_BLOCK_RANGE - 1, head);
-    const logs = await registry.queryFilter(
-      registry.filters[name](),
-      start,
-      end
+    if (!first) await sleep(RPC_CHUNK_PACE_MS);
+    first = false;
+    const logs = await withRateLimitRetry(
+      `${name} ${start}-${end}`,
+      () => registry.queryFilter(registry.filters[name](), start, end)
     );
     out.push(...(logs as ethers.EventLog[]));
   }

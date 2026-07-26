@@ -103,7 +103,7 @@ export interface Scenario {
 const NO_HISTORY: AuthzContext = { incidentCount: 0, overrideCounts: {} };
 
 const CASCADE_FAULTS: Record<string, NodePatch> = {
-  "node-07": { load: 0.88, temp: 78 },
+  "node-07": { status: "warning", load: 0.88, temp: 78 },
   "node-12": { load: 0.66, temp: 70 },
   "node-11": { status: "offline", load: 0, throughput: 0, power: 0 },
 };
@@ -113,7 +113,7 @@ const BENIGN_FAULTS: Record<string, NodePatch> = {
 };
 
 const RECURRING_FAULTS: Record<string, NodePatch> = {
-  "node-09": { load: 0.88, temp: 74 },
+  "node-09": { status: "warning", load: 0.88, temp: 74 },
 };
 
 export const ambiguousCascade: Scenario = {

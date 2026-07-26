@@ -47,13 +47,30 @@ export function TracePanel() {
     );
   }
 
-  const { proposal, verdict, commit, gate, cited, nodeId } = cycle;
+  const { proposal, verdict, commit, gate, cited, nodeId, pending } = cycle;
   const node = nodeId ? nodes[nodeId] : undefined;
   const tierName = proposal?.auth_tier ?? gate?.required_tier ?? null;
   const tier = tierName ? tierSwatch(tierName) : null;
 
   return (
     <div className="flex flex-col">
+      {pending ? (
+        <div
+          className="flex items-center gap-2.5 border-b border-hairline px-3.5 py-2.5"
+          style={{ background: `${ACCENT}14` }}
+          role="status"
+          aria-live="polite"
+        >
+          <span
+            className="animate-attention h-[7px] w-[7px] shrink-0 rounded-full"
+            style={{ background: ACCENT }}
+          />
+          <span className="text-[12.5px] leading-snug text-ink">
+            {pending.label}
+            <span className="text-ink-faint">…</span>
+          </span>
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2 border-b border-hairline px-3.5 py-2.5">
         {node ? (
           <button

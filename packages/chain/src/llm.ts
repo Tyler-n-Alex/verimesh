@@ -184,6 +184,7 @@ export async function proposeAction(
       const { text, valid } = await withRetry(() => callZerog(observation), {
         label: "0g-llm",
         attempts: 2,
+        timeoutMs: Number(process.env.ZEROG_INFERENCE_TIMEOUT_MS ?? 120_000),
       });
       const parsed = ProposalSchema.parse(extractJson(text));
       return { proposal: parsed, provider: "zerog", zerogInferenceValid: valid };
@@ -210,7 +211,11 @@ export async function proposeAction(
         zerogInferenceValid: false,
       };
     }
-  } catch {
+  } catch (err) {
+    console.error(
+      `[llm] ${provider} inference failed, falling back to heuristic — the proposed action and its authorization tier are NOT model-derived:`,
+      err instanceof Error ? err.message : err
+    );
     const fallback = heuristicProposal(observation);
     return {
       proposal: fallback,

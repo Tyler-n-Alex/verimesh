@@ -16,7 +16,7 @@
     { "id": "node-13", "name": "Rig-13", "operator": "opC", "pos": [-1, 0, 3], "T_warn": 70, "T_max": 85, "L_max": 0.92, "X_nominal": 1000, "thermal": { "a": 8, "b": 0.01, "c": 0.15, "T_ambient": 22 } },
     { "id": "node-14", "name": "Rig-14", "operator": "opC", "pos": [1, 0, 3], "T_warn": 70, "T_max": 85, "L_max": 0.92, "X_nominal": 1000, "thermal": { "a": 8, "b": 0.01, "c": 0.15, "T_ambient": 22 } },
     { "id": "node-15", "name": "Rig-15", "operator": "opC", "pos": [3, 0, 3], "T_warn": 70, "T_max": 85, "L_max": 0.92, "X_nominal": 1000, "thermal": { "a": 8, "b": 0.01, "c": 0.15, "T_ambient": 22 } },
-    { "id": "device-s22", "name": "Galaxy S22", "operator": "opC", "pos": [5, 0, 2], "T_warn": 70, "T_max": 85, "L_max": 0.92, "X_nominal": 1000, "thermal": { "a": 8, "b": 0.01, "c": 0.15, "T_ambient": 22 } }
+    { "id": "device-s22", "name": "Galaxy S22", "operator": "opA", "pos": [5, 0, 2], "T_warn": 70, "T_max": 85, "L_max": 0.92, "X_nominal": 1000, "thermal": { "a": 8, "b": 0.01, "c": 0.15, "T_ambient": 22 } }
   ],
   "edges": [
     { "from": "node-00", "to": "node-01", "weight": 0.4 },

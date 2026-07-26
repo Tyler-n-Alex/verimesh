@@ -33,6 +33,8 @@ export interface CitedHistory {
   ts: number;
 }
 
+export type PendingKind = "reasoning" | "committing";
+
 export interface TraceCycle {
   proposal: ProposalRow | null;
   verdict: VerdictRow | null;
@@ -41,6 +43,7 @@ export interface TraceCycle {
   steps: TraceStep[];
   cited: CitedHistory | null;
   nodeId: string | null;
+  pending: { kind: PendingKind; label: string } | null;
 }
 
 const STEP_LABELS: Record<StepKey, string> = {
@@ -100,6 +103,44 @@ function isHistoryEntry(value: unknown): value is HistoryEntry {
   if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;
   return typeof v.nodeId === "string" || typeof v.node_id === "string";
+}
+
+const IN_FLIGHT_GATE = new Set(["authorized", "resolved"]);
+const ACTIVITY_TTL_MS = 120_000;
+
+export function nodeActivity(state: MeshState, nodeId: string): string | null {
+  const now = Date.now();
+  const proposal = state.proposals.find((p) => p.node_id === nodeId) ?? null;
+  const fresh = proposal !== null && now - proposal.ts < ACTIVITY_TTL_MS;
+
+  if (proposal && fresh) {
+    const commit = state.commits[proposal.id] ?? null;
+    const gate =
+      state.gates.find((g) => g.proposal_id === proposal.id) ?? null;
+    if (!commit && gate && IN_FLIGHT_GATE.has(gate.status)) return "Committing";
+    if (!commit && !gate) return "Applying";
+  }
+
+  const signal =
+    state.events.find(
+      (e) =>
+        e.node_id === nodeId &&
+        ["anomaly", "detect"].some((token) =>
+          e.type.toLowerCase().includes(token)
+        )
+    ) ?? null;
+
+  const recovered = state.nodes[nodeId]?.status === "healthy";
+
+  if (
+    signal &&
+    !recovered &&
+    now - signal.ts < ACTIVITY_TTL_MS &&
+    (!proposal || signal.ts > proposal.ts)
+  ) {
+    return "Diagnosing";
+  }
+  return null;
 }
 
 export function deriveCycle(state: MeshState): TraceCycle {
@@ -174,12 +215,16 @@ export function deriveCycle(state: MeshState): TraceCycle {
     ts: verdict?.ts ?? null,
   });
 
+  const authorized = Boolean(gate && IN_FLIGHT_GATE.has(gate.status));
+
   const resolveState: StepState = commit
     ? "done"
     : gate
       ? gate.status === "pending"
         ? "blocked"
-        : "done"
+        : authorized
+          ? "active"
+          : "done"
       : verdict
         ? "active"
         : "idle";
@@ -193,14 +238,77 @@ export function deriveCycle(state: MeshState): TraceCycle {
       : gate
         ? gate.status === "pending"
           ? `frozen — ${gate.required_tier} needs ${gate.required_quorum} distinct human${gate.required_quorum === 1 ? "" : "s"}`
-          : `override resolved — ${gate.chosen_action ?? "—"}`
-        : null,
-    ts: commit?.ts ?? gate?.ts ?? null,
+          : authorized
+            ? `human authorized — resolving the override on-chain and committing ${gate.chosen_action ?? "the action"}…`
+            : `gate ${gate.status} — no action was committed`
+        : verdict
+          ? "Applying the decision…"
+          : null,
+    ts: commit?.ts ?? (authorized ? null : (gate?.ts ?? null)),
   });
+
+  const latestSignal = matchEvent(state.events, ["anomaly", "detect"]);
+  const signalNode = latestSignal?.node_id
+    ? state.nodes[latestSignal.node_id]
+    : undefined;
+  const reasoning = Boolean(
+    latestSignal &&
+      Date.now() - latestSignal.ts < ACTIVITY_TTL_MS &&
+      signalNode?.status !== "healthy" &&
+      (!proposal || latestSignal.ts > proposal.ts)
+  );
+
+  if (reasoning && latestSignal) {
+    const patch = (
+      key: StepKey,
+      next: StepState,
+      headline: string | null,
+      ts: number | null
+    ) => {
+      const step = steps.find((s) => s.key === key);
+      if (!step) return;
+      step.state = next;
+      step.headline = headline;
+      step.ts = ts;
+    };
+
+    patch("detect", "done", latestSignal.message ?? null, latestSignal.ts);
+
+    const historyFresh = Boolean(cited && cited.ts >= latestSignal.ts);
+    if (!historyFresh) {
+      patch(
+        "history",
+        "active",
+        "Querying the subgraph for this node's prior incidents…",
+        null
+      );
+    }
+
+    patch(
+      "propose",
+      "active",
+      "Handing off to the agent — one attested inference via 0G Compute, which takes a few seconds.",
+      null
+    );
+    patch("verify", "idle", null, null);
+    patch("resolve", "idle", null, null);
+  }
 
   for (const step of steps) {
     if (!step.headline) step.headline = IDLE_HINTS[step.key];
   }
 
-  return { proposal, verdict, commit, gate, steps, cited, nodeId };
+  const pending: TraceCycle["pending"] = reasoning
+    ? {
+        kind: "reasoning",
+        label: `Agent is diagnosing ${latestSignal?.node_id ?? "the mesh"} — attested inference via 0G Compute`,
+      }
+    : authorized && !commit
+      ? {
+          kind: "committing",
+          label: `Human authorized — resolving the override on-chain and committing ${gate?.chosen_action ?? "the action"}`,
+        }
+      : null;
+
+  return { proposal, verdict, commit, gate, steps, cited, nodeId, pending };
 }

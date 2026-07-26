@@ -68,12 +68,7 @@ export async function gridFingerprint(
 
   const rows = (data ?? []) as DbNode[];
   rows.sort((a, b) => a.id.localeCompare(b.id));
-  return rows
-    .map(
-      (n) =>
-        `${n.id}:${n.status}:${n.metrics.ts}:${n.metrics.temp}:${n.metrics.throughput}:${n.updated_at}`
-    )
-    .join("|");
+  return rows.map((n) => `${n.id}:${n.status}`).join("|");
 }
 
 export function relevantNodeIds(state: GridState, nodeId: string): string[] {

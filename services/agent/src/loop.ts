@@ -86,6 +86,17 @@ interface GateRow {
 }
 
 const OPEN_GATE_STATUSES = ["pending", "authorized"];
+const OBSERVATION_TELEMETRY_ROWS = Number(
+  process.env.OBSERVATION_TELEMETRY_ROWS ?? 8
+);
+const LLM_MIN_INTERVAL_MS = Number(process.env.LLM_MIN_INTERVAL_MS ?? 35_000);
+const NODE_ACTION_COOLDOWN_MS = Number(
+  process.env.NODE_ACTION_COOLDOWN_MS ?? 180_000
+);
+let lastLlmCallAt = 0;
+let cooldownAnnounced = false;
+const lastActionByNode = new Map<string, number>();
+const settlingAnnounced = new Set<string>();
 
 function gateRequirement(gate: GateRow): AuthorizationRequirement {
   return {
@@ -280,6 +291,10 @@ async function finalizeCommit(
     });
   }
 
+  if (proposal.node_id) {
+    lastActionByNode.set(proposal.node_id, Date.now());
+  }
+
   await supabase.from("commits").insert({
     proposal_id: proposalId,
     applied_action: appliedAction,
@@ -378,21 +393,61 @@ async function runCycle(supabase: SupabaseClient): Promise<void> {
   const detection = detectAnomaly(state);
   if (detection.kind === "NO_OP") return;
 
+  const actedAt = lastActionByNode.get(detection.nodeId) ?? 0;
+  const sinceAction = Date.now() - actedAt;
+  if (actedAt > 0 && sinceAction < NODE_ACTION_COOLDOWN_MS) {
+    if (!settlingAnnounced.has(detection.nodeId)) {
+      console.log(
+        `[agent] ${detection.nodeId} was just acted on — settling for ${Math.ceil(
+          (NODE_ACTION_COOLDOWN_MS - sinceAction) / 1000
+        )}s before reasoning about it again`
+      );
+      settlingAnnounced.add(detection.nodeId);
+    }
+    return;
+  }
+  settlingAnnounced.delete(detection.nodeId);
+
+  const sinceLastLlm = Date.now() - lastLlmCallAt;
+  if (lastLlmCallAt > 0 && sinceLastLlm < LLM_MIN_INTERVAL_MS) {
+    if (!cooldownAnnounced) {
+      console.log(
+        `[agent] holding ${detection.nodeId} — 0G token budget cooldown, ${Math.ceil(
+          (LLM_MIN_INTERVAL_MS - sinceLastLlm) / 1000
+        )}s left`
+      );
+      cooldownAnnounced = true;
+    }
+    return;
+  }
+  cooldownAnnounced = false;
+
   reasoning = true;
   const watchedNodeIds = relevantNodeIds(state, detection.nodeId);
   const fingerprintAtStart = await gridFingerprint(supabase, watchedNodeIds);
   const observationId = randomUUID();
 
   try {
-    const telemetry = await fetchTelemetryWindow(supabase, detection.nodeId);
+    const telemetry = await fetchTelemetryWindow(
+      supabase,
+      detection.nodeId,
+      OBSERVATION_TELEMETRY_ROWS
+    );
     const history = await fetchHistory(detection.nodeId, detection.operator);
+    const watched = new Set(watchedNodeIds);
     const observation = buildObservation(
       observationId,
-      state,
+      {
+        nodes: state.nodes.filter((n) => watched.has(n.id)),
+        edges: state.edges.filter(
+          (e) => watched.has(e.from) || watched.has(e.to)
+        ),
+      },
       telemetry,
       history
     );
 
+    lastLlmCallAt = Date.now();
     const llm = await proposeAction(observation as ObservationPayload);
     const parsed = ProposalSchema.safeParse(llm.proposal);
     if (!parsed.success) {
