@@ -54,4 +54,14 @@ pnpm --filter @verimesh/agent seed
 
 ## AI attribution
 
-AI coding assistants were used during this hackathon for scaffolding, boilerplate, and drafting, under human direction and review. The planning and specification artifacts that guided the build are included in [`docs/`](docs/). All work was produced during the event. Team members should review and expand this section before submission to reflect exactly where and how AI was used.
+**AI wrote the bulk of the code in this repository. The humans did the thinking that decided what the code should be.**
+
+We want to be precise about the split, because it is the honest one and we think it is the interesting one.
+
+**The team owns the concept and every consequential decision.** The core idea — that an autonomous agent managing shared physical infrastructure needs authorization that scales with the blast radius of its actions, and that "which human" is a different question from "is this a human" — is ours. So is the system architecture: the split between a probabilistic proposer and a deterministic verifier, the T0/T1/T2 authorization model, the decision to enforce nullifier distinctness in three independent places, and the choice to make the agent query its own indexed history rather than trust its local database.
+
+The team also made every technology decision and every engineering trade-off: the stack, the choice of sponsor integrations and how each one earns its place, moving the registry to Base Sepolia when The Graph turned out not to support 0G Galileo, writing our own MCP server once we established that The Graph's could not query a testnet endpoint, and setting the physical bounds and thresholds the whole demo rests on. When AI proposed something that was wrong, unsafe, or dishonest about what the system actually did, a human caught it and overruled it.
+
+**AI was the execution layer.** Given a specified design, it wrote the implementation — contracts, mappings, API routes, the agent loop, the 3D front end, tests — and was extremely effective at it. It also did a lot of the debugging legwork under direction.
+
+The planning and specification artifacts that guided the build are in [`docs/`](docs/), and the task board and stream files in [`TASKS/`](TASKS/) are the real working record of who decided what and when. All work was produced during the event.
