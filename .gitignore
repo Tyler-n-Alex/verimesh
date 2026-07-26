@@ -16,3 +16,5 @@ generated/
 .DS_Store
 .turbo/
 chain-snapshot.json
+AGENTS.md
+CLAUDE.md
