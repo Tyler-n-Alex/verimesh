@@ -9,7 +9,7 @@ Built for ETHGlobal Lisbon 2026. Target tracks: **World**, **0G**, **The Graph**
 - **Frontend** — Next.js + React Three Fiber. A live 3D mesh of nodes, reasoning trace, per‑operator history/audit views (GraphQL), and the World ID human‑authorization gate. Reads Supabase + The Graph.
 - **Supabase** — Postgres + Realtime. The operational source of truth the frontend subscribes to.
 - **Agent service** — a Node loop: read telemetry, detect anomalies (rules), query history (The Graph), diagnose + propose (LLM via 0G Compute), verify against the blueprint, commit or freeze for a human.
-- **Chains / data** — 0G Compute (attested inference), 0G Storage (immutable audit blobs), a registry contract on 0G Chain (decision events), The Graph (a subgraph indexing the registry into queryable, trustless memory).
+- **Chains / data** — 0G Compute (attested inference), 0G Storage (immutable audit blobs), a registry contract on **Base Sepolia** (decision events — 0G Chain isn't on The Graph's supported-networks list, so the registry lives where The Graph can index it, while every event still carries the 0G root), The Graph (a subgraph indexing the registry into queryable, trustless memory).
 
 ## Structure
 
@@ -20,8 +20,8 @@ services/mcp        MCP server (incl. The Graph history query)
 packages/shared     types, zod schema, physics, blueprint  (frozen contract)
 packages/sim        telemetry simulator
 packages/verifier   verify_constraints (physical invariants)
-packages/chain      0G + 0G Chain registry + The Graph clients
-contracts           Solidity decision registry (0G Chain)
+packages/chain      0G + Base Sepolia registry + The Graph clients
+contracts           Solidity decision registry (Base Sepolia)
 subgraph            The Graph subgraph indexing the registry
 supabase            schema migrations
 docs                planning + spec artifacts
