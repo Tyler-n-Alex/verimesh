@@ -1,13 +1,12 @@
-import { createHash } from "node:crypto";
 import { basename } from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  authzConfig,
   normalizeNullifier,
   operatorsFor,
   type AuthzConfig,
 } from "@verimesh/shared";
 import { createAdminClient } from "./db";
+import { deriveDemoSigner, liveAuthzConfig } from "./demoSigners";
 
 export const GUARD = "ALLOW_SIMULATED_APPROVALS";
 
@@ -69,10 +68,7 @@ function flag(name: string): string | undefined {
 }
 
 export function simulatedNullifier(operator: string): string {
-  const digest = createHash("sha256")
-    .update(`verimesh-simulated-signer:${operator}`)
-    .digest("hex");
-  return normalizeNullifier(`0x${digest}`);
+  return deriveDemoSigner(operator);
 }
 
 function usage(): void {
@@ -164,7 +160,7 @@ async function main(): Promise<void> {
     gate.proposals?.proposed_action ??
     "NO_OP";
 
-  const config = authzConfig as AuthzConfig;
+  const config = liveAuthzConfig() as AuthzConfig;
   const enrolled = Object.values(config.operators).flat().length > 0;
   const enrolledFor = operatorsFor(config, nullifier);
 

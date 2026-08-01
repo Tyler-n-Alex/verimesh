@@ -5,12 +5,16 @@ import { distinctNullifiers } from "@verimesh/shared";
 import { Overlay } from "@/components/ui/Overlay";
 import { Badge, KeyValue } from "@/components/ui/Pill";
 import { WorldIdScan, type ScanOutcome } from "@/components/worldid/WorldIdScan";
+import { SimulatedApprove } from "@/components/worldid/SimulatedApprove";
+import { DEMO_MODE, type DemoApproveOutcome } from "@/lib/demoClient";
 import { clock, num, shortHash } from "@/lib/format";
 import { ACCENT, NEUTRAL, tierSwatch, verdictSwatch } from "@/lib/palette";
 import { useMeshStore } from "@/store/mesh";
 import type { ApprovalRow } from "@/lib/db";
 
 const NO_APPROVALS: ApprovalRow[] = [];
+
+type Outcome = ScanOutcome | DemoApproveOutcome;
 
 interface Slot {
   operator: string;
@@ -40,7 +44,7 @@ export function FreezeModal() {
   const nodes = useMeshStore((s) => s.nodes);
   const openGate = useMeshStore((s) => s.openGate);
 
-  const [outcome, setOutcome] = useState<ScanOutcome | null>(null);
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
 
   const slots = useMemo<Slot[]>(() => {
     if (!gate) return [];
@@ -120,6 +124,8 @@ export function FreezeModal() {
         </header>
 
         <div className="scroll-thin flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 py-4">
+          {DEMO_MODE ? <DemoNotice /> : null}
+
           <Reason gate={gate} />
 
           <div className="grid grid-cols-4 gap-x-5 gap-y-3">
@@ -219,16 +225,37 @@ export function FreezeModal() {
             </div>
           ) : (
             <>
-              <WorldIdScan
-                gateId={gate.id}
-                chosenAction={proposal?.proposed_action ?? undefined}
-                label={
-                  filled === 0
-                    ? "Scan to authorize"
-                    : `Scan as ${slots.find((s) => !s.filled)?.operator ?? "the second operator"}`
-                }
-                onOutcome={setOutcome}
-              />
+              {DEMO_MODE ? (
+                <>
+                  <SimulatedApprove
+                    gateId={gate.id}
+                    operator={slots.find((s) => !s.filled)?.operator}
+                    label={`Approve as ${slots.find((s) => !s.filled)?.operator ?? "the next operator"}`}
+                    onOutcome={setOutcome}
+                  />
+                  {filled > 0 ? (
+                    <SimulatedApprove
+                      gateId={gate.id}
+                      operator={slots.find((s) => s.filled)?.operator}
+                      variant="quiet"
+                      label={`Try signing twice as ${slots.find((s) => s.filled)?.operator}`}
+                      hint="The same signer cannot fill a second slot. This is refused three times over: by the policy here, by a unique index in Postgres, and by DuplicateNullifier on the registry contract. Click it and watch it fail."
+                      onOutcome={setOutcome}
+                    />
+                  ) : null}
+                </>
+              ) : (
+                <WorldIdScan
+                  gateId={gate.id}
+                  chosenAction={proposal?.proposed_action ?? undefined}
+                  label={
+                    filled === 0
+                      ? "Scan to authorize"
+                      : `Scan as ${slots.find((s) => !s.filled)?.operator ?? "the second operator"}`
+                  }
+                  onOutcome={setOutcome}
+                />
+              )}
               <p className="text-center text-[12px] text-ink-faint">
                 The agent cannot proceed until this is satisfied.
               </p>
@@ -237,6 +264,27 @@ export function FreezeModal() {
         </div>
       </div>
     </Overlay>
+  );
+}
+
+function DemoNotice() {
+  return (
+    <div
+      className="flex flex-col gap-1.5 rounded-lg border px-3 py-2.5"
+      style={{ borderColor: "#c9a13f40", background: "#c9a13f0f" }}
+    >
+      <span className="text-[13px] font-medium" style={{ color: "#c9a13f" }}>
+        Demo mode — authorization here is simulated, not a World ID scan
+      </span>
+      <span className="text-[12.5px] leading-relaxed text-ink-dim">
+        The freeze, the tier, the quorum, the distinctness rule and the on-chain
+        commit below are all real. What is fake is the{" "}
+        <span className="text-ink">personhood proof</span>: each slot is filled
+        by a fabricated signer instead of a human holding a World ID. With demo
+        mode off, this panel asks for an Orb scan and nothing else will satisfy
+        it.
+      </span>
+    </div>
   );
 }
 
@@ -366,7 +414,7 @@ function Breach({ violated }: { violated: Record<string, unknown> }) {
   );
 }
 
-function Rejection({ outcome }: { outcome: ScanOutcome }) {
+function Rejection({ outcome }: { outcome: Outcome }) {
   const duplicate = outcome.rejection === "DUPLICATE_NULLIFIER";
   const tone = duplicate ? "#c9a13f" : "#d1524f";
 

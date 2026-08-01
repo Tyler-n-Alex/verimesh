@@ -1,6 +1,8 @@
 "use client";
 
 import { ProjectorToggle } from "@/components/shell/ProjectorToggle";
+import { DemoControls } from "@/components/shell/DemoControls";
+import { DEMO_MODE } from "@/lib/demoClient";
 import { NEUTRAL, STATUS_TOKENS } from "@/lib/palette";
 import type { NodeStatus } from "@verimesh/shared";
 
@@ -103,6 +105,7 @@ export function TopBar({
         ) : null}
 
         <div className="h-5 w-px bg-hairline" />
+        {DEMO_MODE ? <DemoControls /> : null}
         <ProjectorToggle />
       </div>
     </header>

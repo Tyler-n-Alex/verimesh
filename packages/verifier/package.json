@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./scenarios": "./src/scenarios.ts",
+    "./inject": "./src/inject.ts",
     "./acceptance": "./src/acceptance.ts",
     "./harness": "./src/harness.ts"
   },

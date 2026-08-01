@@ -68,6 +68,7 @@ export function EventLog() {
             const tone = SEVERITY_COLORS[severity];
             const node = event.node_id ? nodes[event.node_id] : undefined;
             const emphatic = severity === "danger" || severity === "notice";
+            const simulated = (event.message ?? "").includes("SIMULATED");
 
             return (
               <li
@@ -96,6 +97,17 @@ export function EventLog() {
                     {node ? (
                       <span className="text-[11.5px] text-ink-faint">
                         {node.name}
+                      </span>
+                    ) : null}
+                    {simulated ? (
+                      <span
+                        className="rounded-sm px-1 py-px text-[10px] font-medium tracking-wide uppercase"
+                        style={{
+                          color: "#c9a13f",
+                          border: "1px solid #c9a13f55",
+                        }}
+                      >
+                        Simulated
                       </span>
                     ) : null}
                   </span>

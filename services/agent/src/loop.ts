@@ -7,6 +7,7 @@ import {
   requireAuthorization,
   type AuthTier,
   type AuthorizationRequirement,
+  type AuthzConfig,
   type AuthzContext,
   type HumanApproval,
   type Proposal,
@@ -40,6 +41,7 @@ import {
   relevantNodeIds,
 } from "./db";
 import { buildObservation, detectAnomaly } from "./detect";
+import { liveAuthzConfig } from "./demoSigners";
 
 const HIGH_CONFIDENCE = 0.75;
 const LOOP_MS = Number(process.env.AGENT_LOOP_MS ?? 8000);
@@ -125,10 +127,8 @@ async function collectedApprovals(
   }));
 }
 
-function allowlistIsEnforceable(): boolean {
-  return Object.values(
-    (authzConfig as { operators: Record<string, string[]> }).operators
-  ).some((list) => list.length > 0);
+function allowlistIsEnforceable(config: AuthzConfig): boolean {
+  return Object.values(config.operators).some((list) => list.length > 0);
 }
 
 function resolveCollected(
@@ -136,8 +136,9 @@ function resolveCollected(
   collected: HumanApproval[],
   context: AuthzContext
 ): ReturnType<typeof resolveGate> {
-  if (allowlistIsEnforceable()) {
-    return resolveGate(requirement, collected, authzConfig, context);
+  const config = liveAuthzConfig();
+  if (allowlistIsEnforceable(config)) {
+    return resolveGate(requirement, collected, config, context);
   }
   return {
     resolved: isSatisfied(requirement, collected),

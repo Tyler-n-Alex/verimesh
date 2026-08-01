@@ -9,7 +9,7 @@ const publicEnv = loadRootEnv(here);
 const nextConfig = {
   reactStrictMode: false,
   outputFileTracingRoot: path.join(here, "../.."),
-  transpilePackages: ["@verimesh/shared"],
+  transpilePackages: ["@verimesh/shared", "@verimesh/verifier"],
   env: publicEnv,
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: false },

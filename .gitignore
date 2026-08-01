@@ -18,3 +18,5 @@ generated/
 chain-snapshot.json
 AGENTS.md
 CLAUDE.md
+.vercel
+.env*

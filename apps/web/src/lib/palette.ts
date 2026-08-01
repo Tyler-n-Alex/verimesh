@@ -177,6 +177,8 @@ const EVENT_SEVERITY: { token: string; severity: Severity }[] = [
   { token: "detect", severity: "warn" },
   { token: "escalate", severity: "warn" },
   { token: "rehearsal", severity: "warn" },
+  { token: "scenario", severity: "warn" },
+  { token: "reset", severity: "info" },
   { token: "commit", severity: "info" },
   { token: "chain", severity: "info" },
   { token: "storage", severity: "info" },
