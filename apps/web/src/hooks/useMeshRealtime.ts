@@ -17,6 +17,20 @@ import type {
 } from "@/lib/db";
 
 const COMMIT_POLL_MS = 4000;
+const TELEMETRY_LIMIT = 1200;
+
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object") {
+    const shaped = err as { message?: unknown; code?: unknown };
+    if (typeof shaped.message === "string" && shaped.message.length > 0) {
+      return typeof shaped.code === "string" && shaped.code.length > 0
+        ? `${shaped.message} (${shaped.code})`
+        : shaped.message;
+    }
+  }
+  return String(err);
+}
 
 export function useMeshRealtime(): void {
   useEffect(() => {
@@ -56,10 +70,14 @@ export function useMeshRealtime(): void {
         supabase!.from("commits").select("*").order("ts", { ascending: false }).limit(120),
         supabase!.from("human_gates").select("*").order("ts", { ascending: false }).limit(40),
         supabase!.from("human_approvals").select("*").order("ts", { ascending: true }).limit(200),
-        supabase!.from("telemetry").select("*").order("ts", { ascending: false }).limit(1200),
+        supabase!
+          .from("telemetry")
+          .select("*")
+          .order("ts", { ascending: false })
+          .limit(TELEMETRY_LIMIT),
       ]);
 
-      const firstError =
+      const coreError =
         nodes.error ??
         edges.error ??
         events.error ??
@@ -67,11 +85,16 @@ export function useMeshRealtime(): void {
         verdicts.error ??
         commits.error ??
         gates.error ??
-        approvals.error ??
-        telemetry.error;
+        approvals.error;
 
-      if (firstError) throw firstError;
+      if (coreError) throw coreError;
       if (cancelled) return;
+
+      if (telemetry.error) {
+        console.warn(
+          `[verimesh] telemetry unavailable, charts will be empty: ${errorMessage(telemetry.error)}`
+        );
+      }
 
       useMeshStore.getState().hydrate({
         nodes: (nodes.data ?? []) as NodeRow[],
@@ -154,8 +177,7 @@ export function useMeshRealtime(): void {
 
     loadInitial().catch((err: unknown) => {
       if (cancelled) return;
-      const message = err instanceof Error ? err.message : String(err);
-      useMeshStore.getState().setLink("error", message);
+      useMeshStore.getState().setLink("error", errorMessage(err));
     });
 
     const commitTimer = window.setInterval(() => {

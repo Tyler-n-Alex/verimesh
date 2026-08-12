@@ -1,11 +1,16 @@
-export const SUBGRAPH_URL = process.env.NEXT_PUBLIC_SUBGRAPH_URL ?? "";
-export const subgraphConfigured = SUBGRAPH_URL.length > 0;
+export * from "@/lib/subgraphQueries";
+
+import { interpolate, type Source } from "@/lib/subgraphQueries";
+
+const PROXY_ENDPOINT = "/api/subgraph";
+
+export const subgraphConfigured =
+  (process.env.NEXT_PUBLIC_SUBGRAPH_ENABLED ?? "").toLowerCase() === "true" ||
+  (process.env.NEXT_PUBLIC_SUBGRAPH_URL ?? "").length > 0;
 
 export const REGISTRY_EXPLORER =
   process.env.NEXT_PUBLIC_REGISTRY_EXPLORER ?? "https://sepolia.basescan.org";
 export const REGISTRY_ADDRESS = process.env.NEXT_PUBLIC_REGISTRY_ADDRESS ?? "";
-
-export type Source = "live" | "fixture";
 
 export interface GqlResult<T> {
   data: T | null;
@@ -15,237 +20,17 @@ export interface GqlResult<T> {
   variables: Record<string, unknown>;
   endpoint: string;
   ms: number;
+  stale: boolean;
+  ageMs: number;
 }
 
-export interface SubgraphDecision {
-  id: string;
-  nodeId: string;
-  operator: string;
-  action: string;
-  verdict: string;
-  authTier: number;
-  humanAuthorized: boolean;
-  zerogRoot: string | null;
-  ts: string;
-  txHash: string;
-}
-
-export interface SubgraphFreeze {
-  id: string;
-  decisionId: string;
-  nodeId: string;
-  operator: string;
-  reason: string;
-  requiredTier: number;
-  requiredQuorum: number;
-  ts: string;
-  txHash: string;
-}
-
-export interface SubgraphApproval {
-  id: string;
-  decisionId: string;
-  worldIdNullifier: string;
-  operator: string;
-  approvalIndex: number;
-  ts: string;
-  txHash: string;
-}
-
-export interface SubgraphOverride {
-  id: string;
-  decisionId: string;
-  chosenAction: string;
-  approvalsCollected: number;
-  ts: string;
-  txHash: string;
-}
-
-export interface SubgraphHumanAuthority {
-  id: string;
-  worldIdNullifier: string;
-  overrideCount: number;
-  lastOverrideTs: string;
-  operators: string[];
-}
-
-export interface SubgraphNodeHistory {
-  id: string;
-  nodeId: string;
-  operator: string;
-  incidentCount: number;
-  violationCount: number;
-  lastIncidentTs: string;
-}
-
-export const HISTORY_QUERY = `
-query NodeHistory($nodeId: String!, $first: Int = 10) {
-  decisions(
-    where: { nodeId: $nodeId }
-    orderBy: ts
-    orderDirection: desc
-    first: $first
-  ) {
-    id
-    nodeId
-    operator
-    action
-    verdict
-    authTier
-    humanAuthorized
-    ts
-    txHash
-  }
-  nodeHistories(where: { nodeId: $nodeId }) {
-    id
-    nodeId
-    operator
-    incidentCount
-    violationCount
-    lastIncidentTs
-  }
-}
-`;
-
-export const OPERATOR_DECISIONS_QUERY = `
-query OperatorDecisions($operator: String!, $first: Int = 50) {
-  decisions(
-    where: { operator: $operator }
-    orderBy: ts
-    orderDirection: desc
-    first: $first
-  ) {
-    id
-    nodeId
-    operator
-    action
-    verdict
-    authTier
-    humanAuthorized
-    zerogRoot
-    ts
-    txHash
-  }
-}
-`;
-
-export const NODE_TIMELINE_QUERY = `
-query NodeTimeline($nodeId: String!, $first: Int = 40) {
-  decisions(
-    where: { nodeId: $nodeId }
-    orderBy: ts
-    orderDirection: desc
-    first: $first
-  ) {
-    id
-    action
-    verdict
-    authTier
-    humanAuthorized
-    ts
-    txHash
-  }
-  freezes(
-    where: { nodeId: $nodeId }
-    orderBy: ts
-    orderDirection: desc
-    first: $first
-  ) {
-    id
-    decisionId
-    reason
-    requiredTier
-    requiredQuorum
-    ts
-    txHash
-  }
-  nodeHistories(where: { nodeId: $nodeId }) {
-    incidentCount
-    violationCount
-    lastIncidentTs
-  }
-}
-`;
-
-export const DECISION_AUDIT_QUERY = `
-query DecisionAudit($decisionId: Bytes!) {
-  decisions(where: { id: $decisionId }) {
-    id
-    nodeId
-    operator
-    action
-    verdict
-    authTier
-    humanAuthorized
-    zerogRoot
-    ts
-    txHash
-  }
-  freezes(where: { decisionId: $decisionId }) {
-    reason
-    requiredTier
-    requiredQuorum
-    ts
-    txHash
-  }
-  approvals(
-    where: { decisionId: $decisionId }
-    orderBy: approvalIndex
-    orderDirection: asc
-  ) {
-    id
-    worldIdNullifier
-    operator
-    approvalIndex
-    ts
-    txHash
-  }
-  overrides(where: { decisionId: $decisionId }) {
-    chosenAction
-    approvalsCollected
-    ts
-    txHash
-  }
-}
-`;
-
-export const AUTHZ_LEDGER_QUERY = `
-query AuthzLedger($first: Int = 50) {
-  approvals(orderBy: ts, orderDirection: desc, first: $first) {
-    id
-    decisionId
-    worldIdNullifier
-    operator
-    approvalIndex
-    ts
-    txHash
-  }
-  humanAuthorities(orderBy: lastOverrideTs, orderDirection: desc, first: $first) {
-    id
-    worldIdNullifier
-    overrideCount
-    lastOverrideTs
-    operators
-  }
-  overrides(orderBy: ts, orderDirection: desc, first: $first) {
-    id
-    decisionId
-    chosenAction
-    approvalsCollected
-    ts
-    txHash
-  }
-}
-`;
-
-export function interpolate(
-  query: string,
-  variables: Record<string, unknown>
-): string {
-  const header = Object.keys(variables).length
-    ? `# variables: ${JSON.stringify(variables)}\n`
-    : "";
-  return `${header}${query.trim()}`;
+interface ProxyResponse<T> {
+  data: T | null;
+  error: string | null;
+  configured: boolean;
+  stale: boolean;
+  ageMs: number;
+  retryAfterMs?: number;
 }
 
 export async function gql<T>(
@@ -262,43 +47,41 @@ export async function gql<T>(
       source: "fixture",
       error: fixture
         ? null
-        : "NEXT_PUBLIC_SUBGRAPH_URL is not set and no fixture is available",
+        : "the subgraph is not configured and no fixture is available",
       queryText,
       variables,
-      endpoint: "(fixture — SUBGRAPH_URL unset)",
+      endpoint: "(fixture — subgraph disabled)",
       ms: 0,
+      stale: false,
+      ageMs: 0,
     };
   }
 
   try {
-    const res = await fetch(SUBGRAPH_URL, {
+    const res = await fetch(PROXY_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query, variables }),
       cache: "no-store",
     });
 
-    const body = (await res.json()) as {
-      data?: T;
-      errors?: { message: string }[];
-    };
+    const body = (await res.json()) as ProxyResponse<T>;
 
-    if (!res.ok) {
-      throw new Error(`subgraph HTTP ${res.status}`);
-    }
-    if (body.errors?.length) {
-      throw new Error(body.errors.map((e) => e.message).join("; "));
+    if (body.data !== null && body.data !== undefined) {
+      return {
+        data: body.data,
+        source: "live",
+        error: body.stale ? body.error : null,
+        queryText,
+        variables,
+        endpoint: PROXY_ENDPOINT,
+        ms: Date.now() - started,
+        stale: body.stale,
+        ageMs: body.ageMs,
+      };
     }
 
-    return {
-      data: body.data ?? null,
-      source: "live",
-      error: null,
-      queryText,
-      variables,
-      endpoint: SUBGRAPH_URL,
-      ms: Date.now() - started,
-    };
+    throw new Error(body.error ?? `subgraph proxy HTTP ${res.status}`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return {
@@ -307,8 +90,10 @@ export async function gql<T>(
       error: message,
       queryText,
       variables,
-      endpoint: SUBGRAPH_URL,
+      endpoint: PROXY_ENDPOINT,
       ms: Date.now() - started,
+      stale: false,
+      ageMs: 0,
     };
   }
 }

@@ -46,6 +46,8 @@ export function useSubgraphQuery<T>(
           error: next.error,
           ms: next.ms,
           endpoint: next.endpoint,
+          stale: next.stale,
+          ageMs: next.ageMs,
         });
       })
       .finally(() => {
@@ -60,8 +62,36 @@ export function useSubgraphQuery<T>(
 
   useEffect(() => {
     if (!pollMs || skip) return;
-    const timer = window.setInterval(refetch, pollMs);
-    return () => window.clearInterval(timer);
+
+    let timer: number | undefined;
+
+    const start = () => {
+      if (timer !== undefined) return;
+      timer = window.setInterval(refetch, pollMs);
+    };
+
+    const stop = () => {
+      if (timer === undefined) return;
+      window.clearInterval(timer);
+      timer = undefined;
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refetch();
+        start();
+      } else {
+        stop();
+      }
+    };
+
+    if (document.visibilityState === "visible") start();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, [pollMs, skip, refetch]);
 
   return { result, loading, refetch };

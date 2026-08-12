@@ -6,6 +6,7 @@ const CLIENT_KEYS = [
   "NEXT_PUBLIC_SUPABASE_ANON_KEY",
   "NEXT_PUBLIC_WORLDID_APP_ID",
   "NEXT_PUBLIC_SUBGRAPH_URL",
+  "NEXT_PUBLIC_SUBGRAPH_ENABLED",
   "NEXT_PUBLIC_REGISTRY_EXPLORER",
   "NEXT_PUBLIC_REGISTRY_ADDRESS",
   "NEXT_PUBLIC_WORLDID_ACTION",
@@ -67,6 +68,12 @@ export function loadRootEnv(appDir) {
   const subgraph = process.env.SUBGRAPH_URL;
   if (subgraph && !process.env.NEXT_PUBLIC_SUBGRAPH_URL) {
     process.env.NEXT_PUBLIC_SUBGRAPH_URL = subgraph;
+  }
+  if (
+    !process.env.NEXT_PUBLIC_SUBGRAPH_ENABLED &&
+    (process.env.SUBGRAPH_URL || process.env.NEXT_PUBLIC_SUBGRAPH_URL)
+  ) {
+    process.env.NEXT_PUBLIC_SUBGRAPH_ENABLED = "true";
   }
 
   const exposed = {};

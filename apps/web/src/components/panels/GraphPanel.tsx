@@ -98,7 +98,7 @@ function DecisionHistory() {
     OPERATOR_DECISIONS_QUERY,
     { operator, first: 50 },
     () => ({ decisions: fixtureDecisionsByOperator(operator) }),
-    { pollMs: 20000 }
+    { pollMs: 60000 }
   );
 
   const rows = useMemo(() => {
@@ -230,7 +230,7 @@ function NodeTimeline() {
       freezes: fixtureFreezesByNode(nodeId),
       nodeHistories: fixtureNodeHistories(nodeId),
     }),
-    { skip: !selectedNodeId, pollMs: 20000 }
+    { skip: !selectedNodeId, pollMs: 60000 }
   );
 
   if (!selectedNodeId) {
@@ -363,7 +363,7 @@ function AuthzLedger() {
       humanAuthorities: FIXTURE_AUTHORITIES,
       overrides: FIXTURE_OVERRIDES,
     }),
-    { pollMs: 20000 }
+    { pollMs: 60000 }
   );
 
   const openAudit = useMeshStore((s) => s.openAudit);
