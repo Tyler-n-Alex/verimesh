@@ -20,7 +20,7 @@ export async function POST() {
   const { data: gates } = await supabase
     .from("human_gates")
     .update({ status: "cancelled" })
-    .in("status", ["pending", "authorized"])
+    .in("status", ["pending", "authorized", "committing"])
     .select("id");
 
   const { data: held } = await supabase

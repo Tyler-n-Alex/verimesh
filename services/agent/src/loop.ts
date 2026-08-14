@@ -97,6 +97,7 @@ const NODE_ACTION_COOLDOWN_MS = Number(
 );
 let lastLlmCallAt = 0;
 let cooldownAnnounced = false;
+const gateHoldAnnounced = new Set<number>();
 const lastActionByNode = new Map<string, number>();
 const settlingAnnounced = new Set<string>();
 
@@ -176,6 +177,15 @@ async function processResolvedGates(supabase: SupabaseClient): Promise<void> {
   })[]) {
     const proposal = gate.proposals;
     if (!proposal) continue;
+
+    const { data: claimed } = await supabase
+      .from("human_gates")
+      .update({ status: "committing" })
+      .eq("id", gate.id)
+      .eq("status", "resolved")
+      .select("id");
+
+    if (!claimed?.length) continue;
 
     const collected = await collectedApprovals(supabase, gate.id);
     const requirement = gateRequirement(gate);
@@ -570,7 +580,23 @@ async function pollGateSatisfaction(supabase: SupabaseClient): Promise<void> {
     );
     const resolution = resolveCollected(requirement, collected, context);
 
-    if (!resolution.resolved) continue;
+    if (!resolution.resolved) {
+      if (!gateHoldAnnounced.has(gate.id)) {
+        gateHoldAnnounced.add(gate.id);
+        await logEvent(
+          supabase,
+          "reject",
+          `gate ${gate.id} holds with ${collected.length} of ${requirement.quorum} accepted — ${
+            resolution.rejected.map((r) => r.rejection).join(", ") ||
+            "quorum not met"
+          }`,
+          gate.proposals?.node_id ?? undefined
+        );
+      }
+      continue;
+    }
+
+    gateHoldAnnounced.delete(gate.id);
 
     const chosen =
       gate.chosen_action ??

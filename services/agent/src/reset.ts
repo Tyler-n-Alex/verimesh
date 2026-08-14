@@ -34,7 +34,7 @@ async function reset(): Promise<void> {
   const { data: gates } = await supabase
     .from("human_gates")
     .update({ status: "cancelled" })
-    .in("status", ["pending", "authorized"])
+    .in("status", ["pending", "authorized", "committing"])
     .select("id,required_tier,required_quorum");
 
   console.log(

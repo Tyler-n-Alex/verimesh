@@ -105,7 +105,7 @@ function isHistoryEntry(value: unknown): value is HistoryEntry {
   return typeof v.nodeId === "string" || typeof v.node_id === "string";
 }
 
-const IN_FLIGHT_GATE = new Set(["authorized", "resolved"]);
+const IN_FLIGHT_GATE = new Set(["authorized", "resolved", "committing"]);
 const ACTIVITY_TTL_MS = 120_000;
 
 export function nodeActivity(state: MeshState, nodeId: string): string | null {
