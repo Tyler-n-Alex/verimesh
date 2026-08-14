@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   AUTH_TIER_CODE,
   authzConfig,
@@ -5,11 +6,34 @@ import {
   isEnrolled,
   isSatisfied,
   normalizeNullifier,
+  DEMO_SIGNER_SEED,
   type AuthzConfig,
   type AuthorizationRequirement,
   type DecisionRecord,
   type HumanApproval,
 } from "@verimesh/shared";
+
+const SEEDED_NULLIFIERS = new Set([
+  "0x00000000000000000000000000000000000000000000000000000000000a11ce",
+  "0x0000000000000000000000000000000000000000000000000000000000000b0b",
+]);
+
+function demoSignerFor(operator: string): string {
+  return `0x${createHash("sha256")
+    .update(`${DEMO_SIGNER_SEED}:${operator}`)
+    .digest("hex")}`;
+}
+
+function offAllowlistCause(nullifier: string, operator: string): string {
+  const value = nullifier.toLowerCase();
+  if (SEEDED_NULLIFIERS.has(value)) {
+    return "seeded by contracts/seed-event.mjs — never a real human";
+  }
+  if (value === demoSignerFor(operator).toLowerCase()) {
+    return "NEXT_PUBLIC_DEMO_MODE simulated signer — no personhood was proven";
+  }
+  return "UNEXPLAINED — a signer that is neither seeded nor simulated";
+}
 
 export type GraphQLFetch = (
   query: string,
@@ -486,10 +510,18 @@ export async function policyEnforcementCheck(
         ? "authz_config has no enrolled nullifiers at all, so nothing on-chain can be shown to have been authorized by an entitled human (B5.6)"
         : offAllowlist.length === 0
           ? "every human recorded on-chain was enrolled to the operator they signed for"
-          : `${offAllowlist.length} on-chain approval(s) came from a human not on that operator's allowlist`,
+          : `${offAllowlist.length} on-chain approval(s) came from a human not on that operator's allowlist — ${
+              offAllowlist.filter(
+                (approval) =>
+                  offAllowlistCause(
+                    approval.worldIdNullifier,
+                    approval.operator
+                  ).startsWith("UNEXPLAINED")
+              ).length
+            } unexplained, the rest seeded or simulated`,
     mismatches: offAllowlist.map(
       (approval) =>
-        `${approval.worldIdNullifier} signed for ${approval.operator} but is not enrolled to it`
+        `${approval.worldIdNullifier} signed for ${approval.operator} but is not enrolled to it — ${offAllowlistCause(approval.worldIdNullifier, approval.operator)}`
     ),
   };
 
