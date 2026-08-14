@@ -33,9 +33,30 @@ points into 0G Storage**.
 Say the seam out loud rather than hiding it: *"the decision record is indexed where The Graph can
 serve it; the immutable payload lives on 0G, and every indexed row carries its 0G root."*
 
-**If Studio deploy fails at G2 (17:00):** fall back to local `graph-node` via docker-compose against
-the same RPC. Same manifest, same mappings — only the host changes. Last resort: mirror history in
-Supabase and keep the subgraph as a read-only proof.
+**If a deploy fails:** fall back to local `graph-node` via docker-compose against the same RPC. Same
+manifest, same mappings — only the host changes. Last resort: mirror history in Supabase and keep
+the subgraph as a read-only proof.
+
+## 🚨 The host is Goldsky, NOT Subgraph Studio — changed 14 Aug
+
+A testnet subgraph can never be published to the decentralized network, so Studio's **development
+query URL is the only endpoint it can ever have** — and that endpoint is rate limited. Five callers
+share that one budget (agent `get_history`, the authz budget reads, `GraphPanel`'s three 60s polls,
+the audit drawer, the acceptance harness), and it ran out.
+
+**Goldsky free Starter tier** has no query quota — only a **20 req / 10 s** burst limit, ~100x our
+steady-state load — plus 3 custom subgraphs, 2,250 worker hours and 100,000 stored entities. Base
+Sepolia is supported under the **same `base-sepolia` slug**, so `subgraph.yaml`, `schema.graphql`
+and `src/mappings.ts` are all **unchanged**. Only the host moved.
+
+⚠️ **Claim it accurately.** It is our subgraph, running real `graph-node`, hosted on Goldsky. It is
+not hosted by The Graph and it is not on the decentralized network. *"Our subgraph, indexed by
+graph-node, hosted on Goldsky"* is the honest line — the same care the MCP-server note below asks
+for.
+
+⚠️ **Always use the `prod` tag in env vars, never the version.** Studio's URL pinned the version
+(`…/verimesh-base-sepolia/v0.0.1`), so every redeploy silently invalidated `SUBGRAPH_URL` in five
+places. `--tag prod` makes the endpoint stable across redeploys.
 
 ## The pipeline
 
@@ -72,12 +93,30 @@ commit. A silent drift here shows up as an empty GraphQL result at 03:00 with no
 ## Toolchain
 
 ```
-npm install -g @graphprotocol/graph-cli@latest
-graph --version
-graph init
-graph codegen && graph build
-graph auth <DEPLOY_KEY>
-graph deploy verimesh
+npm install -g @goldskycom/cli
+cd subgraph && npm install
+goldsky login
+npm run goldsky:deploy
+npm run goldsky:status
+npm run goldsky:logs
+```
+
+`goldsky:deploy` = `graph codegen && graph build && goldsky subgraph deploy
+verimesh-base-sepolia/1.0.0 --path . --tag prod`.
+
+⚠️ **`goldsky login` opens a browser and cannot run headless or under an agent.** For CI or an
+agent session use `goldsky login --token <API_KEY>` with a key from the dashboard. Verified working
+on CLI 13.8.0, 14 Aug.
+
+`goldsky subgraph deploy --from-url <existing endpoint>` migrates a deployed subgraph without its
+source — useful only if the repo is ever lost; `--path .` is the normal route.
+
+### The Studio path (historical — do not use)
+
+```
+npx graph auth --studio <DEPLOY_KEY>
+npx graph codegen && npx graph build
+npx graph deploy verimesh
 ```
 
 ⚠️ **`graph auth <DEPLOY_KEY>` hangs forever on the version this repo pins.** `subgraph/package.json`
@@ -259,11 +298,14 @@ REGISTRY_CHAIN_ID=84532
 REGISTRY_ADDRESS=
 REGISTRY_PRIVATE_KEY=
 REGISTRY_EXPLORER=https://sepolia.basescan.org
-SUBGRAPH_URL=
+SUBGRAPH_URL=https://api.goldsky.com/api/public/project_<ID>/subgraphs/verimesh-base-sepolia/prod/gn
 SUBGRAPH_DEPLOY_KEY=
-NEXT_PUBLIC_SUBGRAPH_URL=
+NEXT_PUBLIC_SUBGRAPH_URL=https://api.goldsky.com/api/public/project_<ID>/subgraphs/verimesh-base-sepolia/prod/gn
 GRAPH_MCP_ENDPOINT=
 ```
+
+`SUBGRAPH_DEPLOY_KEY` is the dead Studio key; Goldsky auth lives in `~/.goldsky` after `goldsky
+login`, or in `--token`.
 
 `SUBGRAPH_URL` blocks **A3.5, A5, B6.2, B7, C5.1** — five tasks across all three streams. Publish
 it the moment it exists (`B2.6`), and hand A a fixture response earlier so A can build against the

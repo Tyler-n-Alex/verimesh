@@ -4,31 +4,48 @@ Indexes the `VerimeshRegistry` events on **Base Sepolia** into a queryable Graph
 
 This is a standalone npm project — it is **not** part of the pnpm workspace. Run `npm install` inside `subgraph/`, not `pnpm install` at the root.
 
-## State (B2.3 done · B2.4 blocked)
+## State
 
 - `abis/VerimeshRegistry.json` — hand-written from `contracts/VerimeshRegistry.sol`.
 - `src/mappings.ts` — all four handlers, plus the three accumulator entities.
-- `subgraph.yaml` — event signatures match the ABI byte for byte; `network: base-sepolia`.
+- `subgraph.yaml` — event signatures match the ABI byte for byte; `network: base-sepolia`, registry at `0x0Fb557580E7C01Aed5D02622558216B9eb19c33c`, `startBlock: 44613204`.
 - `npx graph codegen && npx graph build` both pass.
-- **Missing: `address` and `startBlock` in `subgraph.yaml`.** They are still `0x000…` and `0`. B2.1 has to deploy the registry first. `startBlock: 0` would make the node rescan the whole chain — take the block number off the deploy receipt.
+- **Hosted on Goldsky**, not Subgraph Studio — see below.
 
-## Deploy (B2.4 — ~10 minutes once the address exists)
+## Why not Subgraph Studio
+
+A testnet subgraph can never be published to the decentralized network (publishing is mainnet-only), so Studio's **development query URL is the only endpoint it can ever have** — and that endpoint is rate limited. The agent loop, the authz budget reads, the audit views and the acceptance harness all draw on the same budget, and the frontend's 60s poll against a 60s cache TTL meant almost every poll missed.
+
+Goldsky's free **Starter** tier has no query quota — only a **20 requests / 10 seconds** burst limit, roughly 100x our steady-state load — plus 3 custom subgraphs, 2,250 worker hours (≈3 always-on) and 100,000 stored entities. Base Sepolia is supported under the same `base-sepolia` slug, so **the manifest, schema and mappings are unchanged**. Only the host moved.
+
+This is still a real subgraph running real `graph-node`; it is not hosted by The Graph. Say it that way — *"our subgraph, indexed by graph-node, hosted on Goldsky"* — rather than implying Studio or the decentralized network.
+
+## Deploy
 
 ```
 cd subgraph
 npm install
-npx graph auth --studio <SUBGRAPH_DEPLOY_KEY>
-npx graph codegen && npx graph build
-npx graph deploy verimesh
+goldsky login
+npm run goldsky:deploy
 ```
 
-`--studio` is required on the pinned graph-cli 0.80.x: without it the single positional argument is read as a node URL and the CLI hangs on an interactive prompt for the key. The bare `graph auth <key>` form is >=0.9x. Check `npx graph --version` first.
+`goldsky:deploy` runs `graph codegen && graph build` first, then `goldsky subgraph deploy verimesh-base-sepolia/1.0.0 --path . --tag prod`.
 
-Create the subgraph in Subgraph Studio first to get the slug and the deploy key. Deploying gives a **development query URL** → that is `SUBGRAPH_URL` / `NEXT_PUBLIC_SUBGRAPH_URL`, and publishing it unblocks A3.5, A5, B6.2, B7 and C5.1.
+`goldsky login` opens a browser — it cannot run headless or under an agent. For CI use `goldsky login --token <API_KEY>` with a key from the Goldsky dashboard.
 
-**Do not run `graph publish`.** Publishing to the decentralized network is mainnet-only, and a testnet-indexing subgraph can never be published.
+**Use the `prod` tag, not the raw version, in every env var.** The endpoint is:
+
+```
+https://api.goldsky.com/api/public/project_<PROJECT_ID>/subgraphs/verimesh-base-sepolia/prod/gn
+```
+
+Redeploying `1.0.0` under the same tag keeps that URL valid. The Studio URL pinned the version (`…/verimesh-base-sepolia/v0.0.1`), so every redeploy silently invalidated `SUBGRAPH_URL` in five places. Get the project id from `npm run goldsky:status`.
+
+Backfill from `startBlock: 44613204` covers the blocks since the registry was deployed. It is only ~500 `eth_getLogs` calls, not a block-by-block rescan — the subgraph has event handlers only, one contract, no call or block handlers. Watch it with `npm run goldsky:logs`.
 
 Re-run `graph codegen` after any change to `schema.graphql` or the ABI — stale generated types are the most common way this toolchain wastes an hour.
+
+**The local `graph-node` path is still the offline fallback.** `create-local` / `deploy-local` point at `localhost:8020`; `deploy-local` carries `--version-label` because `graph deploy` otherwise prompts for one and hangs forever on a non-TTY shell.
 
 ## Entity keys
 

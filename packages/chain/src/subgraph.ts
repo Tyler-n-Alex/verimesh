@@ -1,5 +1,5 @@
 import type { HistoryEntry } from "@verimesh/shared";
-import { withRetry } from "./retry";
+import { NonRetryableError, withRetry } from "./retry";
 
 export interface SubgraphDecision {
   id: string;
@@ -81,6 +81,10 @@ export async function gqlFetch<T>(
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ query, variables }),
       });
+
+      if (res.status >= 400 && res.status < 500) {
+        throw new NonRetryableError(`subgraph HTTP ${res.status}`, res.status);
+      }
 
       const body = (await res.json()) as {
         data?: T;

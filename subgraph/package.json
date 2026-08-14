@@ -6,7 +6,11 @@
     "codegen": "graph codegen",
     "build": "graph build",
     "create-local": "graph create --node http://localhost:8020/ verimesh",
-    "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 verimesh"
+    "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 verimesh --version-label v0.0.1",
+    "goldsky:login": "goldsky login",
+    "goldsky:deploy": "graph codegen && graph build && goldsky subgraph deploy verimesh-base-sepolia/1.0.0 --path . --tag prod",
+    "goldsky:status": "goldsky subgraph list verimesh-base-sepolia/1.0.0",
+    "goldsky:logs": "goldsky subgraph log verimesh-base-sepolia/1.0.0"
   },
   "devDependencies": {
     "@graphprotocol/graph-cli": "^0.80.0",
