@@ -108,24 +108,59 @@ async function withRateLimitRetry<T>(
   }
 }
 
-async function collect(
+const EVENT_NAMES = [
+  "Committed",
+  "Frozen",
+  "HumanApproval",
+  "OverrideResolved",
+] as const;
+
+type EventName = (typeof EVENT_NAMES)[number];
+
+async function collectAll(
+  provider: ethers.JsonRpcProvider,
   registry: ethers.Contract,
-  name: string,
+  address: string,
   from: number,
   head: number
-): Promise<ethers.EventLog[]> {
-  const out: ethers.EventLog[] = [];
+): Promise<Record<EventName, ethers.EventLog[]>> {
+  const iface = registry.interface;
+  const fragments = new Map<string, ethers.EventFragment>();
+
+  for (const name of EVENT_NAMES) {
+    const fragment = iface.getEvent(name);
+    if (!fragment) throw new Error(`${name} is missing from the registry ABI`);
+    fragments.set(fragment.topicHash, fragment);
+  }
+
+  const out: Record<EventName, ethers.EventLog[]> = {
+    Committed: [],
+    Frozen: [],
+    HumanApproval: [],
+    OverrideResolved: [],
+  };
+
+  const topics = [[...fragments.keys()]];
   let first = true;
+
   for (let start = from; start <= head; start += RPC_MAX_BLOCK_RANGE) {
     const end = Math.min(start + RPC_MAX_BLOCK_RANGE - 1, head);
     if (!first) await sleep(RPC_CHUNK_PACE_MS);
     first = false;
-    const logs = await withRateLimitRetry(
-      `${name} ${start}-${end}`,
-      () => registry.queryFilter(registry.filters[name](), start, end)
+
+    const logs = await withRateLimitRetry(`registry ${start}-${end}`, () =>
+      provider.getLogs({ address, topics, fromBlock: start, toBlock: end })
     );
-    out.push(...(logs as ethers.EventLog[]));
+
+    for (const log of logs) {
+      const fragment = fragments.get(log.topics[0]);
+      if (!fragment) continue;
+      out[fragment.name as EventName].push(
+        new ethers.EventLog(log, iface, fragment)
+      );
+    }
   }
+
   return out;
 }
 
@@ -145,10 +180,17 @@ async function main(): Promise<void> {
 
   const gateRecords = await gateRecordsByChainId();
 
-  const committed = await collect(registry, "Committed", startBlock, head);
-  const frozen = await collect(registry, "Frozen", startBlock, head);
-  const approved = await collect(registry, "HumanApproval", startBlock, head);
-  const resolved = await collect(registry, "OverrideResolved", startBlock, head);
+  const span = head - startBlock + 1;
+  const chunks = Math.ceil(span / RPC_MAX_BLOCK_RANGE);
+  console.log(
+    `scanning ${span} block(s) in ${chunks} chunk(s) of ${RPC_MAX_BLOCK_RANGE}, all ${EVENT_NAMES.length} events per call`
+  );
+
+  const events = await collectAll(provider, registry, address, startBlock, head);
+  const committed = events.Committed;
+  const frozen = events.Frozen;
+  const approved = events.HumanApproval;
+  const resolved = events.OverrideResolved;
 
   const decisions: DecisionRecord[] = committed.map((log) => ({
     id: log.args.id as string,
