@@ -34,6 +34,7 @@ interface DbNode {
   z: number;
   status: NodeStatus;
   metrics: NodeMetrics;
+  updated_at: string;
 }
 
 interface DbEdge {
@@ -68,7 +69,7 @@ function applyPatch(node: GridNode, patch?: NodePatch): GridNode {
 
 function toGridState(nodes: DbNode[], edges: DbEdge[]): GridState {
   return {
-    nodes: nodes.map((n) => ({
+    nodes: nodes.slice().sort((a, b) => a.id.localeCompare(b.id)).map((n) => ({
       id: n.id,
       name: n.name,
       operator: n.operator_id,
@@ -84,62 +85,110 @@ function toGridState(nodes: DbNode[], edges: DbEdge[]): GridState {
   };
 }
 
-async function loadState(supabase: SupabaseClient): Promise<GridState> {
+async function loadState(
+  supabase: SupabaseClient
+): Promise<{ state: GridState; seen: Map<string, string> }> {
   const [{ data: nodes, error: nodesError }, { data: edges, error: edgesError }] =
     await Promise.all([
-      supabase.from("nodes").select("*").neq("kind", "device"),
-      supabase.from("edges").select("from_node,to_node,weight"),
+      supabase.from("nodes").select("*").neq("kind", "device").order("id"),
+      supabase.from("edges").select("from_node,to_node,weight").order("id"),
     ]);
 
   if (nodesError) throw nodesError;
   if (edgesError) throw edgesError;
 
-  const grid = toGridState((nodes ?? []) as DbNode[], (edges ?? []) as DbEdge[]);
+  const rows = (nodes ?? []) as DbNode[];
+  const seen = new Map(rows.map((row) => [row.id, row.updated_at]));
+  const grid = toGridState(rows, (edges ?? []) as DbEdge[]);
+
   return {
-    ...grid,
-    nodes: grid.nodes.map((node) => applyPatch(node, activeFaults[node.id])),
+    state: {
+      ...grid,
+      nodes: grid.nodes.map((node) => applyPatch(node, activeFaults[node.id])),
+    },
+    seen,
   };
 }
 
 async function persistState(
   supabase: SupabaseClient,
-  state: GridState
-): Promise<void> {
+  state: GridState,
+  seen: Map<string, string>
+): Promise<string[]> {
   const ts = Date.now();
-  const updates = state.nodes.map((node) => ({
-    id: node.id,
-    name: node.name,
-    operator_id: node.operator,
-    status: node.status,
-    metrics: node.metrics,
-    updated_at: new Date(ts).toISOString(),
-  }));
+  const written: string[] = [];
 
-  const { error: nodeError } = await supabase.from("nodes").upsert(updates, {
-    onConflict: "id",
-  });
-  if (nodeError) throw nodeError;
+  for (const node of state.nodes) {
+    const previous = seen.get(node.id);
+    if (previous === undefined) continue;
 
-  const telemetry = state.nodes.map((node) => ({
-    node_id: node.id,
-    ts: node.metrics.ts,
-    load: node.metrics.load,
-    temp: node.metrics.temp,
-    throughput: node.metrics.throughput,
-    power: node.metrics.power,
-    mem: node.metrics.mem,
-    fan_rpm: node.metrics.fanRpm,
-  }));
+    const { data, error } = await supabase
+      .from("nodes")
+      .update({
+        status: node.status,
+        metrics: node.metrics,
+        updated_at: new Date(ts).toISOString(),
+      })
+      .eq("id", node.id)
+      .eq("updated_at", previous)
+      .select("id");
 
-  const { error: telemetryError } = await supabase.from("telemetry").insert(telemetry);
+    if (error) throw error;
+    if ((data ?? []).length > 0) written.push(node.id);
+  }
+
+  if (written.length === 0) return written;
+
+  const owned = new Set(written);
+  const telemetry = state.nodes
+    .filter((node) => owned.has(node.id))
+    .map((node) => ({
+      node_id: node.id,
+      ts: node.metrics.ts,
+      load: node.metrics.load,
+      temp: node.metrics.temp,
+      throughput: node.metrics.throughput,
+      power: node.metrics.power,
+      mem: node.metrics.mem,
+      fan_rpm: node.metrics.fanRpm,
+    }));
+
+  const { error: telemetryError } = await supabase
+    .from("telemetry")
+    .insert(telemetry);
   if (telemetryError) throw telemetryError;
+
+  return written;
 }
 
-export async function tickOnce(supabase: SupabaseClient): Promise<GridState> {
-  const current = await loadState(supabase);
-  const next = step(current);
-  await persistState(supabase, next);
-  return next;
+export interface TickResult {
+  state: GridState;
+  written: string[];
+  skipped: string[];
+}
+
+export function stampNow(state: GridState, ts: number): GridState {
+  return {
+    ...state,
+    nodes: state.nodes.map((node) => ({
+      ...node,
+      metrics: { ...node.metrics, ts },
+    })),
+  };
+}
+
+export async function tickOnce(supabase: SupabaseClient): Promise<TickResult> {
+  const { state: current, seen } = await loadState(supabase);
+  const next = stampNow(step(current), Date.now());
+  const written = await persistState(supabase, next, seen);
+  const owned = new Set(written);
+  return {
+    state: next,
+    written,
+    skipped: next.nodes
+      .filter((node) => seen.has(node.id) && !owned.has(node.id))
+      .map((node) => node.id),
+  };
 }
 
 export async function runSimulator(options: SimOptions): Promise<() => void> {
@@ -157,7 +206,12 @@ export async function runSimulator(options: SimOptions): Promise<() => void> {
   const loop = async () => {
     while (running) {
       try {
-        await tickOnce(supabase);
+        const tick = await tickOnce(supabase);
+        if (tick.skipped.length > 0) {
+          console.log(
+            `[sim] ${tick.skipped.join(", ")} changed under this tick — leaving the newer write in place`
+          );
+        }
       } catch (err) {
         console.error("[sim]", err instanceof Error ? err.message : err);
       }
