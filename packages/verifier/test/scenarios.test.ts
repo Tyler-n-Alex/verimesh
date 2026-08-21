@@ -16,6 +16,7 @@ import {
   SCENARIOS,
   affectedOperators,
   checkHistory,
+  detectAnomalies,
   detectAnomaly,
   pickHistoryNode,
   readSignature,
@@ -181,6 +182,43 @@ describe("C2.4 · detection fires on the intended node, and only that node", () 
 
     expect(forward.kind).toBe("anomaly");
     expect(reversed).toEqual(forward);
+  });
+});
+
+describe("C2.4 · detection ranks every anomaly so a settling node cannot starve the rest", () => {
+  it("returns each anomalous node once, worst first", () => {
+    const cascade = scenarioById("ambiguous_cascade")!.state();
+    const benign = scenarioById("benign_spike")!.state();
+
+    const merged: GridState = {
+      edges: cascade.edges,
+      nodes: cascade.nodes.map((node) =>
+        node.id === "node-02"
+          ? benign.nodes.find((n) => n.id === "node-02")!
+          : node
+      ),
+    };
+
+    const ranked = detectAnomalies(merged);
+    const ids = ranked.map((r) => r.nodeId);
+
+    expect(ids).toContain("node-07");
+    expect(ids).toContain("node-02");
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ranked[0]).toEqual(detectAnomaly(merged));
+  });
+
+  it("is empty on a mesh with nothing wrong", () => {
+    const state = SCENARIOS[0].state();
+    const healthy: GridState = {
+      ...state,
+      nodes: state.nodes.map((node) => ({
+        ...node,
+        status: "healthy" as const,
+        metrics: { ...node.metrics, load: 0.42, temp: 46, power: 210, throughput: 420 },
+      })),
+    };
+    expect(detectAnomalies(healthy)).toEqual([]);
   });
 });
 
@@ -414,7 +452,7 @@ describe("C2.4 · history preconditions are checked, not assumed", () => {
     expect(resolved.history.satisfied).toBe(true);
   });
 
-  it("never moves a scenario across an operator boundary", () => {
+  it("prefers a node belonging to the operator the scenario names", () => {
     const benign = scenarioById("benign_spike")!;
     const counts: Record<string, number> = {};
     for (const id of candidates) counts[id] = REPEAT_OFFENDER_INCIDENTS + 1;
@@ -423,6 +461,24 @@ describe("C2.4 · history preconditions are checked, not assumed", () => {
 
     const resolved = resolveScenario(benign, candidates, counts);
     expect(resolved.scenario.anomalyNode).toBe("node-08");
+    expect(resolved.scenario.expect.operators).toEqual(["opA"]);
+  });
+
+  it("crosses to another operator rather than give up when every opA node is a repeat offender", () => {
+    const benign = scenarioById("benign_spike")!;
+    const counts: Record<string, number> = {};
+    for (const id of candidates) counts[id] = REPEAT_OFFENDER_INCIDENTS + 1;
+    counts["node-04"] = 0;
+
+    const resolved = resolveScenario(benign, candidates, counts);
+    expect(resolved.scenario.anomalyNode).toBe("node-04");
+    expect(resolved.history.satisfied).toBe(true);
+    expect(resolved.scenario.expect.operators).toEqual(["opB"]);
+
+    const state = resolved.scenario.state();
+    const verdict = verifyConstraints(state, resolved.scenario.proposal);
+    expect(verdict.verdict).toBe("VERIFIED");
+    expect(affectedOperators(verdict)).toEqual(["opB"]);
   });
 
   it("never moves the cascade, whose beat depends on its exact topology", () => {

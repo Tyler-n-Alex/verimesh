@@ -1,4 +1,5 @@
 import {
+  detectAnomalies as detectAnomaliesIn,
   detectAnomaly as detectAnomalyIn,
   type DetectionResult,
   type DeviceRule,
@@ -17,6 +18,10 @@ export function deviceRuleFromEnv(): DeviceRule {
 
 export function detectAnomaly(state: GridState): DetectionResult {
   return detectAnomalyIn(state, deviceRuleFromEnv());
+}
+
+export function detectAnomalies(state: GridState) {
+  return detectAnomaliesIn(state, deviceRuleFromEnv());
 }
 
 export interface Observation {

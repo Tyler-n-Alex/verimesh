@@ -106,3 +106,25 @@ export function detectAnomaly(
     signature: worst.signature,
   };
 }
+
+export function detectAnomalies(
+  state: GridState,
+  device?: DeviceRule
+): Extract<DetectionResult, { kind: "anomaly" }>[] {
+  const seen = new Set<string>();
+  const out: Extract<DetectionResult, { kind: "anomaly" }>[] = [];
+  let remaining = state;
+
+  while (true) {
+    const found = detectAnomaly(remaining, device);
+    if (found.kind !== "anomaly" || seen.has(found.nodeId)) break;
+    seen.add(found.nodeId);
+    out.push(found);
+    remaining = {
+      ...remaining,
+      nodes: remaining.nodes.filter((node) => !seen.has(node.id)),
+    };
+  }
+
+  return out;
+}

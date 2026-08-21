@@ -288,6 +288,13 @@ export function relocate(scenario: Scenario, nodeId: string): Scenario {
   const swap = (text: string) =>
     text.split(scenario.anomalyNode).join(nodeId);
 
+  const previousOperator = operatorOf(scenario.anomalyNode);
+  const operator = operatorOf(nodeId);
+  const reoperate = (operators: string[]) =>
+    previousOperator && operator
+      ? operators.map((o) => (o === previousOperator ? operator : o))
+      : operators;
+
   return {
     ...scenario,
     faults,
@@ -303,6 +310,7 @@ export function relocate(scenario: Scenario, nodeId: string): Scenario {
     },
     expect: {
       ...scenario.expect,
+      operators: reoperate(scenario.expect.operators),
       violationNode:
         scenario.expect.violationNode === scenario.anomalyNode
           ? nodeId
@@ -321,6 +329,7 @@ export function relocate(scenario: Scenario, nodeId: string): Scenario {
         : undefined,
       expect: {
         ...variant.expect,
+        operators: reoperate(variant.expect.operators),
         violationNode:
           variant.expect.violationNode === scenario.anomalyNode
             ? nodeId

@@ -94,21 +94,19 @@ export function pickHistoryNode(
   }
 
   const wantRepeat = scenario.history === "repeat";
-  const operator = operatorOf(scenario.anomalyNode);
+  const declaredOperator = operatorOf(scenario.anomalyNode);
 
   const eligible = candidates
-    .filter((id) => boundsFor(id) !== undefined)
-    .filter((id) => operatorOf(id) === operator)
-    .sort();
+    .filter((id) => boundsFor(id) !== undefined && operatorOf(id) !== undefined)
+    .filter((id) => id !== scenario.anomalyNode)
+    .sort((a, b) => {
+      const sameA = operatorOf(a) === declaredOperator ? 0 : 1;
+      const sameB = operatorOf(b) === declaredOperator ? 0 : 1;
+      return sameA - sameB || a.localeCompare(b);
+    });
 
-  const ordered = [
-    scenario.anomalyNode,
-    ...eligible.filter((id) => id !== scenario.anomalyNode),
-  ];
-
-  for (const id of ordered) {
+  for (const id of [scenario.anomalyNode, ...eligible]) {
     if (!boundsFor(id)) continue;
-    if (operatorOf(id) !== operator) continue;
     const repeat = (incidentCounts[id] ?? 0) >= REPEAT_OFFENDER_INCIDENTS;
     if (repeat === wantRepeat) return id;
   }

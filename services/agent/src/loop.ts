@@ -41,7 +41,7 @@ import {
   logEvent,
   relevantNodeIds,
 } from "./db";
-import { buildObservation, detectAnomaly } from "./detect";
+import { buildObservation, detectAnomalies } from "./detect";
 import { liveAuthzConfig } from "./demoSigners";
 
 const HIGH_CONFIDENCE = 0.75;
@@ -465,26 +465,58 @@ async function openHumanGate(
   );
 }
 
+async function injectedSince(
+  supabase: SupabaseClient,
+  nodeId: string,
+  actedAt: number
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("events")
+    .select("ts")
+    .eq("type", "scenario")
+    .eq("node_id", nodeId)
+    .gt("ts", actedAt)
+    .limit(1);
+  return (data ?? []).length > 0;
+}
+
 async function runCycle(supabase: SupabaseClient): Promise<void> {
   if (reasoning) return;
 
   const state = await loadGridState(supabase);
-  const detection = detectAnomaly(state);
-  if (detection.kind === "NO_OP") return;
+  const found = detectAnomalies(state);
+  if (found.length === 0) return;
 
-  const actedAt = lastActionByNode.get(detection.nodeId) ?? 0;
-  const sinceAction = Date.now() - actedAt;
-  if (actedAt > 0 && sinceAction < NODE_ACTION_COOLDOWN_MS) {
-    if (!settlingAnnounced.has(detection.nodeId)) {
-      console.log(
-        `[agent] ${detection.nodeId} was just acted on — settling for ${Math.ceil(
-          (NODE_ACTION_COOLDOWN_MS - sinceAction) / 1000
-        )}s before reasoning about it again`
-      );
-      settlingAnnounced.add(detection.nodeId);
+  let detection: (typeof found)[number] | undefined;
+
+  for (const candidate of found) {
+    const actedAt = lastActionByNode.get(candidate.nodeId) ?? 0;
+    const sinceAction = Date.now() - actedAt;
+
+    if (actedAt > 0 && sinceAction < NODE_ACTION_COOLDOWN_MS) {
+      if (await injectedSince(supabase, candidate.nodeId, actedAt)) {
+        console.log(
+          `[agent] ${candidate.nodeId} was acted on recently, but a fault was deliberately injected since — reasoning about it anyway`
+        );
+        lastActionByNode.delete(candidate.nodeId);
+      } else {
+        if (!settlingAnnounced.has(candidate.nodeId)) {
+          console.log(
+            `[agent] ${candidate.nodeId} was just acted on — settling for ${Math.ceil(
+              (NODE_ACTION_COOLDOWN_MS - sinceAction) / 1000
+            )}s before reasoning about it again`
+          );
+          settlingAnnounced.add(candidate.nodeId);
+        }
+        continue;
+      }
     }
-    return;
+
+    detection = candidate;
+    break;
   }
+
+  if (!detection) return;
   settlingAnnounced.delete(detection.nodeId);
 
   const sinceLastLlm = Date.now() - lastLlmCallAt;

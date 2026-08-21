@@ -69,6 +69,7 @@ interface CommitRow {
 }
 
 interface TelemetryRow {
+  id: number;
   ts: number;
   load: number;
   temp: number;
@@ -131,59 +132,72 @@ async function agentIsRunning(supabase: SupabaseClient): Promise<boolean> {
   return (count ?? 0) > 0;
 }
 
+async function maxId(
+  supabase: SupabaseClient,
+  table: string
+): Promise<number> {
+  const { data } = await supabase
+    .from(table)
+    .select("id")
+    .order("id", { ascending: false })
+    .limit(1);
+  return Number(((data ?? [])[0] as { id?: number })?.id ?? 0);
+}
+
 async function faultHolds(
   supabase: SupabaseClient,
   nodeId: string,
-  injectedAt: number
+  sinceId: number
 ): Promise<{ ok: boolean; detail: string }> {
   const bounds = boundsFor(nodeId);
   if (!bounds) {
     return { ok: false, detail: `${nodeId} has no thermal model in the blueprint` };
   }
 
-  const samples = await waitFor<TelemetryRow[]>(
+  const holds = (row: TelemetryRow) => {
+    const equilibrium = equilibriumTemp(nodeId, row.load, row.power);
+    return (
+      row.temp > bounds.tempWarn &&
+      equilibrium !== undefined &&
+      equilibrium > bounds.tempCeiling
+    );
+  };
+
+  let seen: TelemetryRow[] = [];
+
+  const settled = await waitFor<TelemetryRow[]>(
     "the simulator to carry the fault forward",
     HOLD_TIMEOUT_MS,
     async () => {
       const { data } = await supabase
         .from("telemetry")
-        .select("ts,load,temp,throughput,power")
+        .select("id,ts,load,temp,throughput,power")
         .eq("node_id", nodeId)
-        .gt("ts", injectedAt)
-        .order("ts", { ascending: true });
-      const rows = (data ?? []) as TelemetryRow[];
-      return rows.length >= HOLD_SAMPLES ? rows : null;
+        .gt("id", sinceId)
+        .order("id", { ascending: true });
+      seen = (data ?? []) as TelemetryRow[];
+      if (seen.length < HOLD_SAMPLES) return null;
+      const tail = seen.slice(-HOLD_SAMPLES);
+      return tail.every(holds) ? tail : null;
     }
   );
 
-  if (!samples) {
+  if (!settled) {
+    const last = seen[seen.length - 1];
     return {
       ok: false,
-      detail: `only ${0} tick(s) of telemetry after the injection — the simulator is not carrying the fault forward`,
+      detail: last
+        ? `the fault decayed — ${nodeId} is at ${last.temp.toFixed(1)}°C at load ${last.load.toFixed(2)} / ${last.power.toFixed(0)}W after ${seen.length} tick(s), which settles inside its ceiling`
+        : `no telemetry for ${nodeId} after the injection — the simulator is not carrying the fault forward`,
     };
   }
 
-  const decayed = samples.find((row) => {
-    const equilibrium = equilibriumTemp(nodeId, row.load, row.power);
-    return (
-      row.temp <= bounds.tempWarn ||
-      equilibrium === undefined ||
-      equilibrium <= bounds.tempCeiling
-    );
-  });
-
-  if (decayed) {
-    return {
-      ok: false,
-      detail: `the fault decayed ${samples.indexOf(decayed) + 1} tick(s) in — ${nodeId} back to ${decayed.temp.toFixed(1)}°C at load ${decayed.load.toFixed(2)} / ${decayed.power.toFixed(0)}W, which settles inside its ceiling`,
-    };
-  }
-
-  const last = samples[samples.length - 1];
+  const last = settled[settled.length - 1];
   const equilibrium = equilibriumTemp(nodeId, last.load, last.power) ?? 0;
+  const stale = seen.length - settled.length;
   return {
     ok: true,
-    detail: `held across ${samples.length} tick(s) — ${nodeId} climbing through ${last.temp.toFixed(1)}°C toward ${equilibrium.toFixed(1)}°C, over its ${bounds.tempCeiling}°C ceiling`,
+    detail: `held across the last ${settled.length} tick(s)${stale > 0 ? ` (${stale} earlier row(s) predate the injection)` : ""} — ${nodeId} climbing through ${last.temp.toFixed(1)}°C toward ${equilibrium.toFixed(1)}°C, over its ${bounds.tempCeiling}°C ceiling`,
   };
 }
 
@@ -250,8 +264,9 @@ async function run(scenario: Scenario, timeoutMs: number): Promise<boolean> {
   );
 
   started = Date.now();
+  const proposalsBefore = await maxId(supabase, "proposals");
   const report = await injectScenario(supabase, active);
-  const injectedAt = report.ts;
+  const telemetryAfterInject = await maxId(supabase, "telemetry");
   const signature = readSignature(report.state, anomalyNode);
   record(
     "inject",
@@ -267,7 +282,7 @@ async function run(scenario: Scenario, timeoutMs: number): Promise<boolean> {
   }
 
   started = Date.now();
-  const hold = await faultHolds(supabase, anomalyNode, injectedAt);
+  const hold = await faultHolds(supabase, anomalyNode, telemetryAfterInject);
   record("fault holds", hold.ok, hold.detail, started);
 
   started = Date.now();
@@ -281,8 +296,8 @@ async function run(scenario: Scenario, timeoutMs: number): Promise<boolean> {
           "id,node_id,proposed_action,target_nodes,diagnosis,confidence,llm_provider,zerog_inference_valid,auth_tier,ts"
         )
         .eq("node_id", anomalyNode)
-        .gte("ts", injectedAt)
-        .order("ts", { ascending: false })
+        .gt("id", proposalsBefore)
+        .order("id", { ascending: false })
         .limit(1);
       return ((data ?? [])[0] as ProposalRow) ?? null;
     }
@@ -545,9 +560,11 @@ async function run(scenario: Scenario, timeoutMs: number): Promise<boolean> {
       process.env.ZEROG_INDEXER &&
       process.env.ZEROG_PRIVATE_KEY
   );
-  if (!zerogConfigured) {
+  if (commit.zerog_root) {
+    record("0G storage", true, `root ${commit.zerog_root}`, started);
+  } else if (!zerogConfigured) {
     note(
-      "0G storage is not configured in this environment (ZEROG_PRIVATE_KEY is unset), so no audit blob was uploaded and the commit carries no zerogRoot"
+      "the commit carries no zerogRoot, and 0G storage is not configured in this environment — if the agent runs elsewhere, check its ZEROG_PRIVATE_KEY rather than this one"
     );
   } else {
     record(
