@@ -46,8 +46,27 @@ export async function uploadBlob(
 
       return { rootHash: storedRoot ?? rootHash, txHash };
     },
-    { label: "0g-storage", attempts: 3, timeoutMs: 60_000 }
+    {
+      label: "0g-storage",
+      attempts: Number(process.env.ZEROG_STORAGE_ATTEMPTS ?? 2),
+      timeoutMs: Number(process.env.ZEROG_STORAGE_TIMEOUT_MS ?? 20_000),
+    }
   );
+}
+
+export async function uploadBlobOrSkip(
+  config: StorageConfig,
+  payload: Uint8Array
+): Promise<UploadResult | undefined> {
+  try {
+    return await uploadBlob(config, payload);
+  } catch (err) {
+    console.error(
+      "[0g] the audit blob did not upload — the decision continues with no zerogRoot:",
+      err instanceof Error ? err.message : err
+    );
+    return undefined;
+  }
 }
 
 export function storageFromEnv(): StorageConfig | null {

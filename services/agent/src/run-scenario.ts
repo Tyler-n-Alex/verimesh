@@ -505,8 +505,17 @@ async function run(scenario: Scenario, timeoutMs: number): Promise<boolean> {
   );
 
   started = Date.now();
-  const after = await gridStateOf(supabase);
-  const post = readSignature(after, anomalyNode);
+  const settled = await waitFor("the mesh to reflect the commit", 20_000, async () => {
+    const state = await gridStateOf(supabase);
+    const reading = readSignature(state, anomalyNode);
+    if (reading === undefined) return { state, reading };
+    if (!reading.headedOverCeiling) return { state, reading };
+    if (commit.applied_action === "ISOLATE_NODE") return { state, reading };
+    return null;
+  });
+
+  const after = settled?.state ?? (await gridStateOf(supabase));
+  const post = settled?.reading ?? readSignature(after, anomalyNode);
   const recovered =
     post === undefined ||
     !post.headedOverCeiling ||
@@ -531,14 +540,25 @@ async function run(scenario: Scenario, timeoutMs: number): Promise<boolean> {
   );
 
   started = Date.now();
-  record(
-    "0G storage",
-    Boolean(commit.zerog_root),
-    commit.zerog_root
-      ? `root ${commit.zerog_root}`
-      : "no zerogRoot — the audit blob was not uploaded",
-    started
+  const zerogConfigured = Boolean(
+    process.env.ZEROG_RPC &&
+      process.env.ZEROG_INDEXER &&
+      process.env.ZEROG_PRIVATE_KEY
   );
+  if (!zerogConfigured) {
+    note(
+      "0G storage is not configured in this environment (ZEROG_PRIVATE_KEY is unset), so no audit blob was uploaded and the commit carries no zerogRoot"
+    );
+  } else {
+    record(
+      "0G storage",
+      Boolean(commit.zerog_root),
+      commit.zerog_root
+        ? `root ${commit.zerog_root}`
+        : "no zerogRoot — 0G is configured but the audit blob did not upload",
+      started
+    );
+  }
 
   return steps.every((step) => step.ok);
 }

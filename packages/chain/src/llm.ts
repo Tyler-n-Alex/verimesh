@@ -145,7 +145,7 @@ export async function proposeAction(
       const { text, valid } = await withRetry(() => callZerog(observation), {
         label: "0g-llm",
         attempts: 2,
-        timeoutMs: Number(process.env.ZEROG_INFERENCE_TIMEOUT_MS ?? 120_000),
+        timeoutMs: Number(process.env.ZEROG_INFERENCE_TIMEOUT_MS ?? 45_000),
       });
       const parsed = ProposalSchema.parse(extractJson(text));
       return { proposal: parsed, provider: "zerog", zerogInferenceValid: valid };

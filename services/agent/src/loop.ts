@@ -23,7 +23,7 @@ import {
   resolveOverride,
   storageFromEnv,
   toHistoryEntries,
-  uploadBlob,
+  uploadBlobOrSkip,
   withRetry,
   type ObservationPayload,
 } from "@verimesh/chain";
@@ -96,6 +96,10 @@ const LLM_MIN_INTERVAL_MS = Number(process.env.LLM_MIN_INTERVAL_MS ?? 35_000);
 const NODE_ACTION_COOLDOWN_MS = Number(
   process.env.NODE_ACTION_COOLDOWN_MS ?? 180_000
 );
+const GATE_LOOP_MS = Number(process.env.AGENT_GATE_LOOP_MS ?? 2000);
+const COMMIT_LOOP_MS = Number(process.env.AGENT_COMMIT_LOOP_MS ?? 2000);
+const COMMIT_ATTEMPTS = Number(process.env.AGENT_COMMIT_ATTEMPTS ?? 3);
+const commitAttempts = new Map<number, number>();
 let lastLlmCallAt = 0;
 let cooldownAnnounced = false;
 const gateHoldAnnounced = new Set<number>();
@@ -241,18 +245,53 @@ async function processResolvedGates(supabase: SupabaseClient): Promise<void> {
       resolution.accepted[0]?.chosenAction ??
       proposal.proposed_action;
 
-    await finalizeCommit(
-      supabase,
-      proposal.id,
-      chosen,
-      requirement.tier,
-      resolution.accepted.map((approval) => ({
-        ...approval,
-        chosenAction: approval.chosenAction || chosen,
-      })),
-      gate.id
-    );
+    try {
+      await finalizeCommit(
+        supabase,
+        proposal.id,
+        chosen,
+        requirement.tier,
+        resolution.accepted.map((approval) => ({
+          ...approval,
+          chosenAction: approval.chosenAction || chosen,
+        })),
+        gate.id
+      );
+      commitAttempts.delete(gate.id);
+    } catch (err) {
+      await releaseGate(supabase, gate, err, proposal.node_id ?? undefined);
+    }
   }
+}
+
+async function releaseGate(
+  supabase: SupabaseClient,
+  gate: GateRow,
+  err: unknown,
+  nodeId?: string
+): Promise<void> {
+  const attempts = (commitAttempts.get(gate.id) ?? 0) + 1;
+  commitAttempts.set(gate.id, attempts);
+  const detail = err instanceof Error ? err.message : String(err);
+  const exhausted = attempts >= COMMIT_ATTEMPTS;
+
+  await supabase
+    .from("human_gates")
+    .update({ status: exhausted ? "blocked" : "resolved" })
+    .eq("id", gate.id);
+
+  await logEvent(
+    supabase,
+    "reject",
+    exhausted
+      ? `gate ${gate.id} could not be committed after ${attempts} attempts and is blocked: ${detail}`
+      : `gate ${gate.id} commit attempt ${attempts} of ${COMMIT_ATTEMPTS} failed, returning it to resolved to retry: ${detail}`,
+    nodeId
+  );
+
+  console.error(
+    `[agent] gate ${gate.id} commit attempt ${attempts} failed: ${detail}`
+  );
 }
 
 async function finalizeCommit(
@@ -299,8 +338,8 @@ async function finalizeCommit(
   const storage = storageFromEnv();
   if (storage) {
     const payload = new TextEncoder().encode(JSON.stringify(blob, null, 2));
-    const uploaded = await uploadBlob(storage, payload);
-    zerogRoot = uploaded.rootHash;
+    const uploaded = await uploadBlobOrSkip(storage, payload);
+    zerogRoot = uploaded?.rootHash ?? "";
   }
 
   const registry = registryFromEnv();
@@ -659,21 +698,30 @@ export async function startAgent(): Promise<() => void> {
   const supabase = createAdminClient();
   let running = true;
 
-  const loop = async () => {
-    while (running) {
-      try {
-        await processResolvedGates(supabase);
-        await pollGateSatisfaction(supabase);
-        await runCycle(supabase);
-      } catch (err) {
-        console.error("[agent]", err instanceof Error ? err.message : err);
+  const spawn = (
+    label: string,
+    intervalMs: number,
+    work: () => Promise<void>
+  ) => {
+    void (async () => {
+      while (running) {
+        try {
+          await work();
+        } catch (err) {
+          console.error(`[agent:${label}]`, err instanceof Error ? err.message : err);
+        }
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
       }
-      await new Promise((resolve) => setTimeout(resolve, LOOP_MS));
-    }
+    })();
   };
 
-  void loop();
-  console.log("[agent] loop started");
+  spawn("gates", GATE_LOOP_MS, () => pollGateSatisfaction(supabase));
+  spawn("commits", COMMIT_LOOP_MS, () => processResolvedGates(supabase));
+  spawn("reason", LOOP_MS, () => runCycle(supabase));
+
+  console.log(
+    `[agent] loops started — gates every ${GATE_LOOP_MS}ms, commits every ${COMMIT_LOOP_MS}ms, reasoning every ${LOOP_MS}ms`
+  );
 
   return () => {
     running = false;

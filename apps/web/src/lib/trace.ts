@@ -33,7 +33,7 @@ export interface CitedHistory {
   ts: number;
 }
 
-export type PendingKind = "reasoning" | "committing";
+export type PendingKind = "reasoning" | "committing" | "awaiting-agent";
 
 export interface TraceCycle {
   proposal: ProposalRow | null;
@@ -105,7 +105,12 @@ function isHistoryEntry(value: unknown): value is HistoryEntry {
   return typeof v.nodeId === "string" || typeof v.node_id === "string";
 }
 
-const IN_FLIGHT_GATE = new Set(["authorized", "resolved", "committing"]);
+const AWAITING_AGENT_GATE = new Set(["authorized", "resolved"]);
+const COMMITTING_GATE = new Set(["committing"]);
+const IN_FLIGHT_GATE = new Set([
+  ...AWAITING_AGENT_GATE,
+  ...COMMITTING_GATE,
+]);
 const ACTIVITY_TTL_MS = 120_000;
 
 export function nodeActivity(state: MeshState, nodeId: string): string | null {
@@ -117,7 +122,10 @@ export function nodeActivity(state: MeshState, nodeId: string): string | null {
     const commit = state.commits[proposal.id] ?? null;
     const gate =
       state.gates.find((g) => g.proposal_id === proposal.id) ?? null;
-    if (!commit && gate && IN_FLIGHT_GATE.has(gate.status)) return "Committing";
+    if (!commit && gate && COMMITTING_GATE.has(gate.status)) return "Committing";
+    if (!commit && gate && AWAITING_AGENT_GATE.has(gate.status)) {
+      return "Authorized";
+    }
     if (!commit && !gate) return "Applying";
   }
 
@@ -216,6 +224,8 @@ export function deriveCycle(state: MeshState): TraceCycle {
   });
 
   const authorized = Boolean(gate && IN_FLIGHT_GATE.has(gate.status));
+  const committing = Boolean(gate && COMMITTING_GATE.has(gate.status));
+  const waitingForAgent = Boolean(gate && AWAITING_AGENT_GATE.has(gate.status));
 
   const resolveState: StepState = commit
     ? "done"
@@ -238,9 +248,11 @@ export function deriveCycle(state: MeshState): TraceCycle {
       : gate
         ? gate.status === "pending"
           ? `frozen — ${gate.required_tier} needs ${gate.required_quorum} distinct human${gate.required_quorum === 1 ? "" : "s"}`
-          : authorized
-            ? `human authorized — resolving the override on-chain and committing ${gate.chosen_action ?? "the action"}…`
-            : `gate ${gate.status} — no action was committed`
+          : committing
+            ? `resolving the override on-chain and committing ${gate.chosen_action ?? "the action"}…`
+            : waitingForAgent
+              ? `human authorized — waiting for the agent to pick the gate up and commit ${gate.chosen_action ?? "the action"}`
+              : `gate ${gate.status} — no action was committed`
         : verdict
           ? "Applying the decision…"
           : null,
@@ -303,12 +315,17 @@ export function deriveCycle(state: MeshState): TraceCycle {
         kind: "reasoning",
         label: `Agent is diagnosing ${latestSignal?.node_id ?? "the mesh"} — attested inference via 0G Compute`,
       }
-    : authorized && !commit
+    : committing && !commit
       ? {
           kind: "committing",
-          label: `Human authorized — resolving the override on-chain and committing ${gate?.chosen_action ?? "the action"}`,
+          label: `Resolving the override on-chain and committing ${gate?.chosen_action ?? "the action"}`,
         }
-      : null;
+      : waitingForAgent && !commit
+        ? {
+            kind: "awaiting-agent",
+            label: `Human authorized — waiting for the agent to pick the gate up and commit ${gate?.chosen_action ?? "the action"}`,
+          }
+        : null;
 
   return { proposal, verdict, commit, gate, steps, cited, nodeId, pending };
 }
