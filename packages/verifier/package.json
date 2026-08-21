@@ -13,8 +13,8 @@
     "./harness": "./src/harness.ts"
   },
   "scripts": {
-    "acceptance": "tsx --env-file=../../.env.local src/bin/acceptance.ts",
-    "snapshot": "tsx --env-file=../../.env.local src/bin/chain-snapshot.ts"
+    "acceptance": "tsx --env-file-if-exists=../../.env.local src/bin/acceptance.ts",
+    "snapshot": "tsx --env-file-if-exists=../../.env.local src/bin/chain-snapshot.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.8",
