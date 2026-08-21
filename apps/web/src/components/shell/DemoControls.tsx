@@ -179,154 +179,156 @@ export function DemoControls() {
 
       {open ? (
         <div
-          className="surface elevated animate-rise absolute top-full right-0 z-50 mt-2 flex w-[420px] flex-col overflow-hidden rounded-xl"
+          className="surface elevated animate-rise absolute top-full right-0 z-50 mt-2 flex max-h-[calc(100vh-5rem)] w-[420px] flex-col overflow-hidden rounded-xl"
           role="dialog"
           aria-label="Demo controls"
         >
-          <header className="flex flex-col gap-1.5 border-b border-hairline px-4 py-3">
-            <span className="text-[14px] font-medium text-ink">
-              Inject a fault and watch the agent handle it
-            </span>
-            <span className="text-[12px] leading-relaxed text-ink-faint">
-              This writes a real fault into the mesh. The live agent detects it,
-              reasons over 0G Compute, runs the deterministic verifier, and
-              either acts alone or freezes for a human. Give it a few seconds —
-              it runs on its own loop.
-            </span>
-            <span className="text-[12px] leading-relaxed text-ink-faint">
-              Each injection resets the mesh to baseline, cancels any open gate,
-              and writes a fault the physics could actually have produced — so
-              the fault holds instead of decaying and the agent sees the
-              signature the scenario is named after. Scenarios whose tier
-              depends on history are moved onto a node whose indexed record
-              matches before they run.
-            </span>
-            <span className="text-[12px] leading-relaxed text-ink-faint">
-              The tier each scenario lists is what the signature is{" "}
-              <span className="text-ink-dim">designed</span> to produce. The
-              agent still writes its own proposal every run, so a different
-              action can come back with a different tier — and that is the
-              policy working, not the demo failing.
-            </span>
-          </header>
+          <div className="scroll-thin flex min-h-0 flex-1 flex-col overflow-y-auto">
+            <header className="flex flex-col gap-1.5 border-b border-hairline px-4 py-3">
+              <span className="text-[14px] font-medium text-ink">
+                Inject a fault and watch the agent handle it
+              </span>
+              <span className="text-[12px] leading-relaxed text-ink-faint">
+                This writes a real fault into the mesh. The live agent detects it,
+                reasons over 0G Compute, runs the deterministic verifier, and
+                either acts alone or freezes for a human. Give it a few seconds —
+                it runs on its own loop.
+              </span>
+              <span className="text-[12px] leading-relaxed text-ink-faint">
+                Each injection resets the mesh to baseline, cancels any open gate,
+                and writes a fault the physics could actually have produced — so
+                the fault holds instead of decaying and the agent sees the
+                signature the scenario is named after. Scenarios whose tier
+                depends on history are moved onto a node whose indexed record
+                matches before they run.
+              </span>
+              <span className="text-[12px] leading-relaxed text-ink-faint">
+                The tier each scenario lists is what the signature is{" "}
+                <span className="text-ink-dim">designed</span> to produce. The
+                agent still writes its own proposal every run, so a different
+                action can come back with a different tier — and that is the
+                policy working, not the demo failing.
+              </span>
+            </header>
 
-          <div className="scroll-thin flex max-h-[52vh] flex-col overflow-y-auto">
-            {phase === "loading" ? (
-              <span className="px-4 py-4 text-[12.5px] text-ink-faint">
-                Loading scenarios…
-              </span>
-            ) : scenarios.length === 0 ? (
-              <span className="px-4 py-4 text-[12.5px] text-ink-faint">
-                No scenarios available.
-              </span>
-            ) : (
-              scenarios.map((scenario) => (
-                <ScenarioRow
-                  key={scenario.id}
-                  scenario={scenario}
-                  busy={busy}
-                  pending={pending === scenario.id}
-                  onRun={() => void inject(scenario)}
-                />
-              ))
-            )}
-          </div>
-
-          {result ? (
-            <div
-              className="flex flex-col gap-1 border-t border-hairline px-4 py-3"
-              style={{
-                background: result.ok ? "transparent" : "#d1524f0f",
-              }}
-            >
-              <span
-                className="text-[12.5px] font-medium"
-                style={{ color: result.ok ? NEUTRAL.text : "#d1524f" }}
-              >
-                {result.ok
-                  ? (result.title ?? "Done")
-                  : (result.error ?? "Failed")}
-              </span>
-              {result.ok && result.note ? (
-                <span className="text-[12px] leading-relaxed text-ink-faint">
-                  {result.note}
+            <div className="flex flex-col">
+              {phase === "loading" ? (
+                <span className="px-4 py-4 text-[12.5px] text-ink-faint">
+                  Loading scenarios…
                 </span>
-              ) : null}
-              {result.ok && result.relocatedFrom ? (
-                <span className="text-[12px] leading-relaxed text-ink-faint">
-                  Moved off <span className="data">{result.relocatedFrom}</span>{" "}
-                  onto <span className="data">{result.node}</span> so the
-                  scenario&rsquo;s history precondition actually holds.
+              ) : scenarios.length === 0 ? (
+                <span className="px-4 py-4 text-[12.5px] text-ink-faint">
+                  No scenarios available.
                 </span>
-              ) : null}
-              {result.ok && result.history ? (
-                <span
-                  className="text-[12px] leading-relaxed"
-                  style={{ color: result.history.satisfied ? undefined : "#c9a13f" }}
-                >
-                  {result.history.satisfied ? "" : "⚠ "}
-                  {result.history.detail}
-                </span>
-              ) : null}
-              {result.ok && result.cleared &&
-              (result.cleared.gates.length > 0 ||
-                result.cleared.held.length > 0) ? (
-                <span className="text-[12px] leading-relaxed text-ink-faint">
-                  Cleared first: {result.cleared.gates.length} open gate(s)
-                  {result.cleared.held.length > 0
-                    ? `, released ${result.cleared.held.join(", ")}`
-                    : ""}
-                  .
-                </span>
-              ) : null}
-              {result.ok && result.node ? (
-                <span className="text-[12px] text-ink-faint">
-                  Watch the reasoning trace — the agent runs on its own loop, so
-                  give it a few seconds.
-                </span>
-              ) : null}
+              ) : (
+                scenarios.map((scenario) => (
+                  <ScenarioRow
+                    key={scenario.id}
+                    scenario={scenario}
+                    busy={busy}
+                    pending={pending === scenario.id}
+                    onRun={() => void inject(scenario)}
+                  />
+                ))
+              )}
             </div>
-          ) : null}
 
-          <div className="flex flex-col gap-2 border-t border-hairline px-4 py-3">
-            <div className="flex items-baseline gap-2">
-              <span className="text-[13px] font-medium text-ink">
-                Forced action — guaranteed two-human quorum
+            {result ? (
+              <div
+                className="flex flex-col gap-1 border-t border-hairline px-4 py-3"
+                style={{
+                  background: result.ok ? "transparent" : "#d1524f0f",
+                }}
+              >
+                <span
+                  className="text-[12.5px] font-medium"
+                  style={{ color: result.ok ? NEUTRAL.text : "#d1524f" }}
+                >
+                  {result.ok
+                    ? (result.title ?? "Done")
+                    : (result.error ?? "Failed")}
+                </span>
+                {result.ok && result.note ? (
+                  <span className="text-[12px] leading-relaxed text-ink-faint">
+                    {result.note}
+                  </span>
+                ) : null}
+                {result.ok && result.relocatedFrom ? (
+                  <span className="text-[12px] leading-relaxed text-ink-faint">
+                    Moved off <span className="data">{result.relocatedFrom}</span>{" "}
+                    onto <span className="data">{result.node}</span> so the
+                    scenario&rsquo;s history precondition actually holds.
+                  </span>
+                ) : null}
+                {result.ok && result.history ? (
+                  <span
+                    className="text-[12px] leading-relaxed"
+                    style={{ color: result.history.satisfied ? undefined : "#c9a13f" }}
+                  >
+                    {result.history.satisfied ? "" : "⚠ "}
+                    {result.history.detail}
+                  </span>
+                ) : null}
+                {result.ok && result.cleared &&
+                (result.cleared.gates.length > 0 ||
+                  result.cleared.held.length > 0) ? (
+                  <span className="text-[12px] leading-relaxed text-ink-faint">
+                    Cleared first: {result.cleared.gates.length} open gate(s)
+                    {result.cleared.held.length > 0
+                      ? `, released ${result.cleared.held.join(", ")}`
+                      : ""}
+                    .
+                  </span>
+                ) : null}
+                {result.ok && result.node ? (
+                  <span className="text-[12px] text-ink-faint">
+                    Watch the reasoning trace — the agent runs on its own loop, so
+                    give it a few seconds.
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="flex flex-col gap-2 border-t border-hairline px-4 py-3">
+              <div className="flex items-baseline gap-2">
+                <span className="text-[13px] font-medium text-ink">
+                  Forced action — guaranteed two-human quorum
+                </span>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void force()}
+                  className="ml-auto shrink-0 rounded-md border px-2.5 py-1 text-[12px] transition-colors hover:bg-[#c9a13f1a] disabled:opacity-40"
+                  style={{ borderColor: "#c9a13f", color: "#c9a13f" }}
+                >
+                  {phase === "forcing" ? "Asking…" : `Isolate ${FORCE_NODE}`}
+                </button>
+              </div>
+              <span className="text-[12px] leading-relaxed text-ink-faint">
+                Skips the agent&rsquo;s proposal and asks the policy directly what{" "}
+                <span className="data">ISOLATE_NODE</span> on {FORCE_NODE} would
+                cost. Isolating it sheds load onto a neighbour belonging to a
+                different operator, so the blast radius crosses an operator
+                boundary and the answer is always{" "}
+                <span className="text-ink-dim">T2, two distinct humans</span>. The
+                row it writes is marked as a rehearsal.
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3 border-t border-hairline bg-abyss px-4 py-3">
+              <span className="text-[12px] leading-relaxed text-ink-faint">
+                Left the mesh in a stuck state? Reset returns every node to
+                baseline and cancels open gates.
               </span>
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => void force()}
-                className="ml-auto shrink-0 rounded-md border px-2.5 py-1 text-[12px] transition-colors hover:bg-[#c9a13f1a] disabled:opacity-40"
-                style={{ borderColor: "#c9a13f", color: "#c9a13f" }}
+                onClick={() => void reset()}
+                className="ml-auto shrink-0 rounded-md border border-hairline px-3 py-1.5 text-[12.5px] text-ink-dim transition-colors hover:border-hairline-bright hover:text-ink disabled:opacity-40"
               >
-                {phase === "forcing" ? "Asking…" : `Isolate ${FORCE_NODE}`}
+                {phase === "resetting" ? "Resetting…" : "Reset mesh"}
               </button>
             </div>
-            <span className="text-[12px] leading-relaxed text-ink-faint">
-              Skips the agent&rsquo;s proposal and asks the policy directly what{" "}
-              <span className="data">ISOLATE_NODE</span> on {FORCE_NODE} would
-              cost. Isolating it sheds load onto a neighbour belonging to a
-              different operator, so the blast radius crosses an operator
-              boundary and the answer is always{" "}
-              <span className="text-ink-dim">T2, two distinct humans</span>. The
-              row it writes is marked as a rehearsal.
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3 border-t border-hairline bg-abyss px-4 py-3">
-            <span className="text-[12px] leading-relaxed text-ink-faint">
-              Left the mesh in a stuck state? Reset returns every node to
-              baseline and cancels open gates.
-            </span>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void reset()}
-              className="ml-auto shrink-0 rounded-md border border-hairline px-3 py-1.5 text-[12.5px] text-ink-dim transition-colors hover:border-hairline-bright hover:text-ink disabled:opacity-40"
-            >
-              {phase === "resetting" ? "Resetting…" : "Reset mesh"}
-            </button>
           </div>
         </div>
       ) : null}
