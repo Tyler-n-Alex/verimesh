@@ -1,15 +1,64 @@
 import { NextResponse } from "next/server";
 import { SCENARIOS, scenarioById } from "@verimesh/verifier/scenarios";
-import { anomalyNodeOf, injectScenario } from "@verimesh/verifier/inject";
+import {
+  anomalyNodeOf,
+  describeInjection,
+  injectScenario,
+  resolveScenario,
+} from "@verimesh/verifier/inject";
 import { ADMIN_MISSING, getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { DEMO_OFF, demoModeOn } from "@/lib/demo";
 
 export const dynamic = "force-dynamic";
 
 const COOLDOWN_MS = 20_000;
+const SUBGRAPH_URL = process.env.SUBGRAPH_URL ?? "";
 
 interface Body {
   scenarioId?: string;
+}
+
+const INCIDENTS_QUERY = `query IncidentCounts($nodeIds: [String!]!) {
+  nodeHistories(where: { nodeId_in: $nodeIds }, first: 1000) {
+    nodeId
+    incidentCount
+  }
+}`;
+
+async function incidentCounts(
+  nodeIds: string[]
+): Promise<Record<string, number> | null> {
+  if (!SUBGRAPH_URL || nodeIds.length === 0) return null;
+
+  try {
+    const res = await fetch(SUBGRAPH_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        query: INCIDENTS_QUERY,
+        variables: { nodeIds },
+      }),
+      cache: "no-store",
+    });
+
+    if (!res.ok) return null;
+
+    const body = (await res.json()) as {
+      data?: { nodeHistories?: { nodeId: string; incidentCount: number }[] };
+      errors?: unknown[];
+    };
+
+    if (body.errors?.length || !body.data) return null;
+
+    const counts: Record<string, number> = {};
+    for (const nodeId of nodeIds) counts[nodeId] = 0;
+    for (const row of body.data.nodeHistories ?? []) {
+      counts[row.nodeId] = row.incidentCount;
+    }
+    return counts;
+  } catch {
+    return null;
+  }
 }
 
 export async function GET() {
@@ -21,6 +70,8 @@ export async function GET() {
       signature: scenario.signature,
       narrative: scenario.narrative,
       node: anomalyNodeOf(scenario) ?? null,
+      history: scenario.history,
+      relocatable: scenario.relocatable,
       expect: {
         verdict: scenario.expect.verdict,
         tier: scenario.expect.tier,
@@ -48,8 +99,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
   }
 
-  const scenario = scenarioById(body.scenarioId ?? "");
-  if (!scenario) {
+  const declared = scenarioById(body.scenarioId ?? "");
+  if (!declared) {
     return NextResponse.json(
       {
         error: `unknown scenario — have ${SCENARIOS.map((s) => s.id).join(", ")}`,
@@ -77,39 +128,36 @@ export async function POST(request: Request) {
     );
   }
 
-  const anomalyNode = anomalyNodeOf(scenario) ?? null;
+  const { data: rows } = await supabase
+    .from("nodes")
+    .select("id")
+    .neq("kind", "device")
+    .order("id");
 
-  if (anomalyNode) {
-    const { data: node } = await supabase
-      .from("nodes")
-      .select("status")
-      .eq("id", anomalyNode)
-      .maybeSingle<{ status: string }>();
+  const candidates = ((rows ?? []) as { id: string }[]).map((row) => row.id);
 
-    if (node?.status === "awaiting_human") {
-      return NextResponse.json(
-        {
-          error: `${anomalyNode} is already frozen awaiting a human — the detector skips it, so a fresh injection would do nothing. Resolve the open gate or reset the mesh first.`,
-          blockedBy: "awaiting_human",
-          node: anomalyNode,
-        },
-        { status: 409 }
-      );
-    }
-  }
+  const counts =
+    declared.history === "any" ? null : await incidentCounts(candidates);
 
-  const { injection } = await injectScenario(supabase, scenario);
+  const resolved = resolveScenario(declared, candidates, counts);
+  const scenario = resolved.scenario;
+  const report = await injectScenario(supabase, scenario);
 
   return NextResponse.json({
     ok: true,
     scenarioId: scenario.id,
     title: scenario.title,
     narrative: scenario.narrative,
-    node: anomalyNode,
-    injection: injection ?? null,
+    node: report.anomalyNode,
+    relocatedFrom: resolved.relocatedFrom ?? null,
+    history: resolved.history,
+    injection: report.injection ?? null,
+    cleared: {
+      gates: report.gatesCancelled,
+      held: report.heldReleased,
+      reset: report.nodesReset,
+    },
     expect: scenario.expect,
-    note: injection
-      ? `${injection.nodeId} driven to ${injection.power}W — starts at ${injection.temp.toFixed(1)}°C and settles at ${injection.equilibrium.toFixed(1)}°C, over its ceiling`
-      : "faults written, but no thermal drive applied — the fault may decay before the agent sees it",
+    note: describeInjection(report.state, report.anomalyNode),
   });
 }

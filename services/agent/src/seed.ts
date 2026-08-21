@@ -1,6 +1,7 @@
 import { basename } from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { blueprint } from "@verimesh/shared";
+import { BASELINE_METRICS } from "@verimesh/verifier";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_KEY;
@@ -13,14 +14,7 @@ const supabase = createClient(url, serviceKey, {
   auth: { persistSession: false },
 });
 
-const baseMetrics = {
-  load: 0.42,
-  temp: 46,
-  throughput: 1000,
-  power: 210,
-  mem: 0.38,
-  fanRpm: 2100,
-};
+const baseMetrics = BASELINE_METRICS;
 
 const DEVICE_NODE_ID = process.env.NEXT_PUBLIC_DEVICE_NODE_ID ?? "device-s22";
 

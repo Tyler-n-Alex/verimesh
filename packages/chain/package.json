@@ -12,5 +12,10 @@
   },
   "devDependencies": {
     "@types/node": "^22.7.4"
+  },
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./heuristic": "./src/heuristic.ts"
   }
 }

@@ -1,3 +1,4 @@
+export * from "./heuristic";
 export * from "./retry";
 export * from "./subgraph";
 export * from "./registry";

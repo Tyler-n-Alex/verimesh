@@ -1,6 +1,7 @@
 import { ethers } from "ethers";
 import { createZGComputeNetworkBroker } from "@0gfoundation/0g-compute-ts-sdk";
 import { ProposalSchema, type ProposalInput } from "@verimesh/shared";
+import { heuristicProposal } from "./heuristic";
 import { withRetry } from "./retry";
 
 export interface ObservationPayload {
@@ -132,46 +133,6 @@ async function callZerog(observation: ObservationPayload): Promise<{
     : false;
 
   return { text: data.choices[0]?.message?.content ?? "", valid };
-}
-
-function heuristicProposal(observation: ObservationPayload): ProposalInput {
-  const telemetry = observation.telemetry_window as {
-    node_id?: string;
-    temp?: number;
-    throughput?: number;
-    load?: number;
-  }[];
-
-  const hottest = telemetry.reduce(
-    (best, row) => ((row.temp ?? 0) > (best.temp ?? 0) ? row : best),
-    telemetry[0] ?? {}
-  );
-
-  const nodeId = hottest.node_id ?? "node-07";
-  const history = observation.history_window as { action?: string; verdict?: string }[];
-  const priorSafe = history.find(
-    (h) => h.verdict === "VERIFIED" && h.action === "SCALE_UP"
-  );
-
-  if (priorSafe) {
-    return {
-      diagnosis: `Repeat thermal stress on ${nodeId}; prior SCALE_UP then ISOLATE succeeded.`,
-      proposed_action: "SCALE_UP",
-      target_nodes: [nodeId],
-      expected_effect: "Add capacity before isolation to protect neighbors.",
-      confidence: 0.82,
-      risk_flags: ["history_informed"],
-    };
-  }
-
-  return {
-    diagnosis: `Elevated temperature on ${nodeId} with degraded throughput.`,
-    proposed_action: "ISOLATE_NODE",
-    target_nodes: [nodeId],
-    expected_effect: "Remove hot node from the active mesh.",
-    confidence: 0.65,
-    risk_flags: ["thermal", "throughput"],
-  };
 }
 
 export async function proposeAction(

@@ -10,13 +10,20 @@ type Phase = "idle" | "loading" | "running" | "resetting" | "forcing";
 const FORCE_NODE = "node-07";
 const FORCE_ACTION = "ISOLATE_NODE";
 
+interface HistoryCheck {
+  satisfied: boolean;
+  detail: string;
+}
+
 interface InjectResult {
   ok?: boolean;
   error?: string;
   title?: string;
   node?: string | null;
   note?: string;
-  blockedBy?: string;
+  relocatedFrom?: string | null;
+  history?: HistoryCheck;
+  cleared?: { gates: number[]; held: string[]; reset: string[] };
 }
 
 export function DemoControls() {
@@ -71,7 +78,7 @@ export function DemoControls() {
         });
         const body = (await res.json()) as InjectResult;
         setResult(res.ok ? { ...body, ok: true } : { ...body, ok: false });
-        if (res.ok && scenario.node) selectNode(scenario.node);
+        if (res.ok && body.node) selectNode(body.node);
       } catch (err) {
         setResult({
           ok: false,
@@ -187,12 +194,19 @@ export function DemoControls() {
               it runs on its own loop.
             </span>
             <span className="text-[12px] leading-relaxed text-ink-faint">
-              The tier each scenario lists is what it was{" "}
+              Each injection resets the mesh to baseline, cancels any open gate,
+              and writes a fault the physics could actually have produced — so
+              the fault holds instead of decaying and the agent sees the
+              signature the scenario is named after. Scenarios whose tier
+              depends on history are moved onto a node whose indexed record
+              matches before they run.
+            </span>
+            <span className="text-[12px] leading-relaxed text-ink-faint">
+              The tier each scenario lists is what the signature is{" "}
               <span className="text-ink-dim">designed</span> to produce. The
-              agent writes its own proposal every run, so a different action can
-              come back with a different tier — and that is the policy working,
-              not the demo failing. Use the forced action below for a guaranteed
-              two-human quorum.
+              agent still writes its own proposal every run, so a different
+              action can come back with a different tier — and that is the
+              policy working, not the demo failing.
             </span>
           </header>
 
@@ -236,6 +250,33 @@ export function DemoControls() {
               {result.ok && result.note ? (
                 <span className="text-[12px] leading-relaxed text-ink-faint">
                   {result.note}
+                </span>
+              ) : null}
+              {result.ok && result.relocatedFrom ? (
+                <span className="text-[12px] leading-relaxed text-ink-faint">
+                  Moved off <span className="data">{result.relocatedFrom}</span>{" "}
+                  onto <span className="data">{result.node}</span> so the
+                  scenario&rsquo;s history precondition actually holds.
+                </span>
+              ) : null}
+              {result.ok && result.history ? (
+                <span
+                  className="text-[12px] leading-relaxed"
+                  style={{ color: result.history.satisfied ? undefined : "#c9a13f" }}
+                >
+                  {result.history.satisfied ? "" : "⚠ "}
+                  {result.history.detail}
+                </span>
+              ) : null}
+              {result.ok && result.cleared &&
+              (result.cleared.gates.length > 0 ||
+                result.cleared.held.length > 0) ? (
+                <span className="text-[12px] leading-relaxed text-ink-faint">
+                  Cleared first: {result.cleared.gates.length} open gate(s)
+                  {result.cleared.held.length > 0
+                    ? `, released ${result.cleared.held.join(", ")}`
+                    : ""}
+                  .
                 </span>
               ) : null}
               {result.ok && result.node ? (

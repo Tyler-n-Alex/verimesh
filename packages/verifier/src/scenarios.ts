@@ -1,5 +1,6 @@
 import {
   blueprint,
+  REPEAT_OFFENDER_INCIDENTS,
   type AuthTier,
   type AuthzContext,
   type GridNode,
@@ -9,14 +10,15 @@ import {
   type Proposal,
   type Verdict,
 } from "@verimesh/shared";
+import { consistentMetrics, driveNode } from "./signature";
 
 export const BASELINE_METRICS: Omit<NodeMetrics, "ts"> = {
   load: 0.42,
   temp: 46,
-  throughput: 1000,
+  throughput: 420,
   power: 210,
   mem: 0.38,
-  fanRpm: 2100,
+  fanRpm: 1960,
 };
 
 type BlueprintNode = {
@@ -25,6 +27,17 @@ type BlueprintNode = {
   operator: string;
   pos: number[];
 };
+
+const OPERATORS = new Map<string, string>(
+  (blueprint as unknown as { nodes: BlueprintNode[] }).nodes.map((n) => [
+    n.id,
+    n.operator,
+  ])
+);
+
+export function operatorOf(nodeId: string): string | undefined {
+  return OPERATORS.get(nodeId);
+}
 
 export function baselineState(ts: number = 0): GridState {
   const source = blueprint as unknown as {
@@ -65,10 +78,20 @@ export function patchState(
       return {
         ...node,
         status: status ?? node.status,
-        metrics: { ...node.metrics, ...metrics },
+        metrics: consistentMetrics(node.id, { ...node.metrics, ...metrics }),
       };
     }),
   };
+}
+
+export function faultedState(
+  faults: Record<string, NodePatch>,
+  anomalyNode: string,
+  ts: number = 0
+): GridState {
+  const state = patchState(baselineState(ts), faults);
+  driveNode(state, anomalyNode);
+  return state;
 }
 
 export interface ScenarioExpectation {
@@ -87,12 +110,17 @@ export interface ScenarioVariant {
   expect: ScenarioExpectation;
 }
 
+export type HistoryRequirement = "any" | "fresh" | "repeat";
+
 export interface Scenario {
   id: string;
   title: string;
   narrative: string;
   signature: string;
   faults: Record<string, NodePatch>;
+  anomalyNode: string;
+  history: HistoryRequirement;
+  relocatable: boolean;
   state: () => GridState;
   proposal: Proposal;
   context: AuthzContext;
@@ -109,11 +137,11 @@ const CASCADE_FAULTS: Record<string, NodePatch> = {
 };
 
 const BENIGN_FAULTS: Record<string, NodePatch> = {
-  "node-02": { load: 0.88, temp: 74 },
+  "node-02": { load: 0.88, temp: 78 },
 };
 
 const RECURRING_FAULTS: Record<string, NodePatch> = {
-  "node-09": { status: "warning", load: 0.88, temp: 74 },
+  "node-09": { status: "warning", load: 0.88, temp: 78 },
 };
 
 export const ambiguousCascade: Scenario = {
@@ -123,7 +151,10 @@ export const ambiguousCascade: Scenario = {
     "node-07 (opA) is running hot with falling throughput while its neighbour node-11 has just dropped offline. Rules alone cannot tell a benign load spike from a failure cascade. The agent proposes ISOLATE_NODE; the verifier projects the shed load onto node-12 (opB) and finds a breach. The fix for opA's node damages opB's node, so authorization crosses an operator boundary and demands a two-human quorum.",
   signature: "rising temp + falling throughput + a neighbour offline",
   faults: CASCADE_FAULTS,
-  state: () => patchState(baselineState(), CASCADE_FAULTS),
+  anomalyNode: "node-07",
+  history: "any",
+  relocatable: false,
+  state: () => faultedState(CASCADE_FAULTS, "node-07"),
   proposal: {
     diagnosis:
       "node-07 shows thermal runaway with throughput collapse and has lost a neighbour; this looks like a failure cascade rather than a benign spike",
@@ -171,7 +202,10 @@ export const recurringFault: Scenario = {
     "node-09 (opA) shows the same signature the mesh has already seen twice before. The physics are identical to a benign spike and the verifier still returns VERIFIED — but the subgraph remembers the prior incidents, so the same safe action now costs a human signature. History does not just change the diagnosis; it changes how much authority the fix requires.",
   signature: "the benign_spike signature, re-injected on a repeat offender",
   faults: RECURRING_FAULTS,
-  state: () => patchState(baselineState(), RECURRING_FAULTS),
+  anomalyNode: "node-09",
+  history: "repeat",
+  relocatable: true,
+  state: () => faultedState(RECURRING_FAULTS, "node-09"),
   proposal: {
     diagnosis:
       "node-09 load spike with elevated temperature, matching two prior incidents on this node",
@@ -181,7 +215,7 @@ export const recurringFault: Scenario = {
     confidence: 0.88,
     risk_flags: ["repeat_offender"],
   },
-  context: { incidentCount: 3, overrideCounts: {} },
+  context: { incidentCount: REPEAT_OFFENDER_INCIDENTS + 1, overrideCounts: {} },
   expect: {
     verdict: "VERIFIED",
     operators: ["opA"],
@@ -210,7 +244,10 @@ export const benignSpike: Scenario = {
     "node-02 (opA) takes a load spike with no neighbour loss and no history. THROTTLE_NODE projects clean, the blast radius stays inside one operator, and the agent acts alone. This is the control case that proves the gate is differential rather than always-on.",
   signature: "load spike, no neighbour loss, no history",
   faults: BENIGN_FAULTS,
-  state: () => patchState(baselineState(), BENIGN_FAULTS),
+  anomalyNode: "node-02",
+  history: "fresh",
+  relocatable: true,
+  state: () => faultedState(BENIGN_FAULTS, "node-02"),
   proposal: {
     diagnosis: "node-02 load spike within a recoverable thermal envelope",
     proposed_action: "THROTTLE_NODE",
@@ -237,4 +274,58 @@ export const SCENARIOS: Scenario[] = [
 
 export function scenarioById(id: string): Scenario | undefined {
   return SCENARIOS.find((scenario) => scenario.id === id);
+}
+
+export function relocate(scenario: Scenario, nodeId: string): Scenario {
+  if (nodeId === scenario.anomalyNode) return scenario;
+  if (!scenario.relocatable) return scenario;
+
+  const faults: Record<string, NodePatch> = {};
+  for (const [id, patch] of Object.entries(scenario.faults)) {
+    faults[id === scenario.anomalyNode ? nodeId : id] = patch;
+  }
+
+  const swap = (text: string) =>
+    text.split(scenario.anomalyNode).join(nodeId);
+
+  return {
+    ...scenario,
+    faults,
+    anomalyNode: nodeId,
+    narrative: swap(scenario.narrative),
+    state: () => faultedState(faults, nodeId),
+    proposal: {
+      ...scenario.proposal,
+      diagnosis: swap(scenario.proposal.diagnosis),
+      target_nodes: scenario.proposal.target_nodes.map((id) =>
+        id === scenario.anomalyNode ? nodeId : id
+      ),
+    },
+    expect: {
+      ...scenario.expect,
+      violationNode:
+        scenario.expect.violationNode === scenario.anomalyNode
+          ? nodeId
+          : scenario.expect.violationNode,
+    },
+    variants: scenario.variants.map((variant) => ({
+      ...variant,
+      proposal: variant.proposal
+        ? {
+            ...variant.proposal,
+            diagnosis: swap(variant.proposal.diagnosis),
+            target_nodes: variant.proposal.target_nodes.map((id) =>
+              id === scenario.anomalyNode ? nodeId : id
+            ),
+          }
+        : undefined,
+      expect: {
+        ...variant.expect,
+        violationNode:
+          variant.expect.violationNode === scenario.anomalyNode
+            ? nodeId
+            : variant.expect.violationNode,
+      },
+    })),
+  };
 }

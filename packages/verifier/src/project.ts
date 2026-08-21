@@ -12,6 +12,7 @@ import {
 export const HORIZON_STEPS = 30;
 export const HORIZON_DT = 1;
 export const THROTTLE_LOAD_FACTOR = 0.6;
+export const THROTTLE_POWER_FACTOR = 0.6;
 export const SCALE_UP_LOAD_FACTOR = 0.7;
 export const SCALE_UP_POWER_FACTOR = 1.1;
 
@@ -86,6 +87,7 @@ function dedupe(values: string[]): string[] {
 
 function applyThrottle(node: GridNode): void {
   node.metrics.load = node.metrics.load * THROTTLE_LOAD_FACTOR;
+  node.metrics.power = node.metrics.power * THROTTLE_POWER_FACTOR;
 }
 
 function applyScaleUp(node: GridNode): void {

@@ -1,10 +1,24 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { scenarioById, SCENARIOS, type Scenario } from "@verimesh/verifier";
+import {
+  boundsFor,
+  equilibriumTemp,
+  type NodeMetrics,
+} from "@verimesh/shared";
+import {
+  describeInjection,
+  injectScenario,
+  readSignature,
+  scenarioById,
+  SCENARIOS,
+  type Scenario,
+} from "@verimesh/verifier";
 import { createAdminClient } from "./db";
-import { anomalyNodeOf, injectScenario } from "./scenario";
+import { prepareScenario } from "./scenario";
 import { recordSimulatedApproval, simulationAllowed } from "./approve";
 
 const POLL_MS = 1500;
+const HOLD_SAMPLES = 2;
+const HOLD_TIMEOUT_MS = 45_000;
 const EXPLORER =
   process.env.REGISTRY_EXPLORER ?? "https://sepolia.basescan.org";
 
@@ -19,6 +33,7 @@ interface ProposalRow {
   id: number;
   node_id: string;
   proposed_action: string;
+  target_nodes: string[] | null;
   diagnosis: string;
   confidence: number;
   llm_provider: string | null;
@@ -53,7 +68,16 @@ interface CommitRow {
   human_authorized: boolean;
 }
 
+interface TelemetryRow {
+  ts: number;
+  load: number;
+  temp: number;
+  throughput: number;
+  power: number;
+}
+
 const steps: Step[] = [];
+const notes: string[] = [];
 
 function flag(name: string): string | undefined {
   const index = process.argv.indexOf(`--${name}`);
@@ -72,6 +96,11 @@ function record(name: string, ok: boolean, detail: string, started: number) {
     `${ok ? "PASS" : "FAIL"}  ${name.padEnd(22)} ${detail}  (${(step.ms / 1000).toFixed(1)}s)`
   );
   return step;
+}
+
+function note(line: string) {
+  notes.push(line);
+  console.log(`NOTE  ${"".padEnd(22)} ${line}`);
 }
 
 async function waitFor<T>(
@@ -102,10 +131,88 @@ async function agentIsRunning(supabase: SupabaseClient): Promise<boolean> {
   return (count ?? 0) > 0;
 }
 
+async function faultHolds(
+  supabase: SupabaseClient,
+  nodeId: string,
+  injectedAt: number
+): Promise<{ ok: boolean; detail: string }> {
+  const bounds = boundsFor(nodeId);
+  if (!bounds) {
+    return { ok: false, detail: `${nodeId} has no thermal model in the blueprint` };
+  }
+
+  const samples = await waitFor<TelemetryRow[]>(
+    "the simulator to carry the fault forward",
+    HOLD_TIMEOUT_MS,
+    async () => {
+      const { data } = await supabase
+        .from("telemetry")
+        .select("ts,load,temp,throughput,power")
+        .eq("node_id", nodeId)
+        .gt("ts", injectedAt)
+        .order("ts", { ascending: true });
+      const rows = (data ?? []) as TelemetryRow[];
+      return rows.length >= HOLD_SAMPLES ? rows : null;
+    }
+  );
+
+  if (!samples) {
+    return {
+      ok: false,
+      detail: `only ${0} tick(s) of telemetry after the injection — the simulator is not carrying the fault forward`,
+    };
+  }
+
+  const decayed = samples.find((row) => {
+    const equilibrium = equilibriumTemp(nodeId, row.load, row.power);
+    return (
+      row.temp <= bounds.tempWarn ||
+      equilibrium === undefined ||
+      equilibrium <= bounds.tempCeiling
+    );
+  });
+
+  if (decayed) {
+    return {
+      ok: false,
+      detail: `the fault decayed ${samples.indexOf(decayed) + 1} tick(s) in — ${nodeId} back to ${decayed.temp.toFixed(1)}°C at load ${decayed.load.toFixed(2)} / ${decayed.power.toFixed(0)}W, which settles inside its ceiling`,
+    };
+  }
+
+  const last = samples[samples.length - 1];
+  const equilibrium = equilibriumTemp(nodeId, last.load, last.power) ?? 0;
+  return {
+    ok: true,
+    detail: `held across ${samples.length} tick(s) — ${nodeId} climbing through ${last.temp.toFixed(1)}°C toward ${equilibrium.toFixed(1)}°C, over its ${bounds.tempCeiling}°C ceiling`,
+  };
+}
+
+async function gridStateOf(supabase: SupabaseClient) {
+  const [{ data: nodes }, { data: edges }] = await Promise.all([
+    supabase.from("nodes").select("*").order("id"),
+    supabase.from("edges").select("from_node,to_node,weight").order("id"),
+  ]);
+
+  return {
+    nodes: ((nodes ?? []) as Record<string, unknown>[]).map((n) => ({
+      id: n.id as string,
+      name: n.name as string,
+      operator: n.operator_id as string,
+      pos: [n.x, n.y, n.z] as [number, number, number],
+      status: n.status as never,
+      metrics: n.metrics as NodeMetrics,
+    })),
+    edges: ((edges ?? []) as Record<string, unknown>[]).map((e) => ({
+      from: e.from_node as string,
+      to: e.to_node as string,
+      weight: e.weight as number,
+    })),
+  };
+}
+
 async function run(scenario: Scenario, timeoutMs: number): Promise<boolean> {
   const supabase = createAdminClient();
   const autoApprove = has("auto-approve");
-  const anomalyNode = anomalyNodeOf(scenario) ?? "";
 
   console.log("");
   console.log(`${scenario.title} — ${scenario.signature}`);
@@ -125,16 +232,43 @@ async function run(scenario: Scenario, timeoutMs: number): Promise<boolean> {
   if (!live) return false;
 
   started = Date.now();
-  const injectedAt = Date.now();
-  const { injection } = await injectScenario(supabase, scenario);
+  const resolved = await prepareScenario(supabase, scenario);
+  const active = resolved.scenario;
+  const anomalyNode = active.anomalyNode;
+
+  if (resolved.relocatedFrom) {
+    note(
+      `moved off ${resolved.relocatedFrom} onto ${anomalyNode} to satisfy the "${active.history}" history precondition`
+    );
+  }
+
   record(
-    "inject",
-    Boolean(injection),
-    injection
-      ? `${injection.nodeId} at ${injection.power}W settles at ${injection.equilibrium.toFixed(1)}°C, over its ceiling`
-      : `faults written but ${anomalyNode} has no blueprint thermal model — detection may never fire`,
+    "precondition",
+    resolved.history.satisfied,
+    resolved.history.detail,
     started
   );
+
+  started = Date.now();
+  const report = await injectScenario(supabase, active);
+  const injectedAt = report.ts;
+  const signature = readSignature(report.state, anomalyNode);
+  record(
+    "inject",
+    Boolean(report.injection) && Boolean(signature),
+    describeInjection(report.state, anomalyNode),
+    started
+  );
+
+  if (report.gatesCancelled.length > 0 || report.heldReleased.length > 0) {
+    note(
+      `cleared before injecting: ${report.gatesCancelled.length} open gate(s)${report.heldReleased.length > 0 ? `, released ${report.heldReleased.join(", ")}` : ""}`
+    );
+  }
+
+  started = Date.now();
+  const hold = await faultHolds(supabase, anomalyNode, injectedAt);
+  record("fault holds", hold.ok, hold.detail, started);
 
   started = Date.now();
   const proposal = await waitFor<ProposalRow>(
@@ -144,7 +278,7 @@ async function run(scenario: Scenario, timeoutMs: number): Promise<boolean> {
       const { data } = await supabase
         .from("proposals")
         .select(
-          "id,node_id,proposed_action,diagnosis,confidence,llm_provider,zerog_inference_valid,auth_tier,ts"
+          "id,node_id,proposed_action,target_nodes,diagnosis,confidence,llm_provider,zerog_inference_valid,auth_tier,ts"
         )
         .eq("node_id", anomalyNode)
         .gte("ts", injectedAt)
@@ -172,6 +306,18 @@ async function run(scenario: Scenario, timeoutMs: number): Promise<boolean> {
   );
 
   started = Date.now();
+  const scripted = active.proposal.proposed_action;
+  const onScript = proposal.proposed_action === scripted;
+  record(
+    "narrative",
+    onScript || has("any-action"),
+    onScript
+      ? `the proposer chose ${scripted}, the action this scenario is written around`
+      : `the proposer chose ${proposal.proposed_action}, not the ${scripted} this scenario is written around — the tier below follows the action actually proposed, which is the policy working, not the pipeline failing. Pass --any-action to accept this`,
+    started
+  );
+
+  started = Date.now();
   const verdict = await waitFor<VerdictRow>(
     "the verifier",
     60_000,
@@ -190,20 +336,24 @@ async function run(scenario: Scenario, timeoutMs: number): Promise<boolean> {
     return false;
   }
 
+  const expectedVerdict = onScript ? active.expect.verdict : undefined;
   record(
     "verify",
-    true,
-    `${verdict.verdict} — ${verdict.detail.slice(0, 110)}`,
+    expectedVerdict === undefined || verdict.verdict === expectedVerdict,
+    `${verdict.verdict}${expectedVerdict && verdict.verdict !== expectedVerdict ? ` — this scenario expects ${expectedVerdict}` : ""} — ${verdict.detail.slice(0, 110)}`,
     started
   );
 
   started = Date.now();
-  const expectedTier = flag("expect-tier") ?? scenario.expect.tier;
+  const expectedTier =
+    flag("expect-tier") ??
+    (onScript ? active.expect.tier : undefined);
+
   if (proposal.auth_tier === "T0_AUTONOMOUS") {
     record(
       "authorize",
-      expectedTier === "T0_AUTONOMOUS",
-      `T0 — no human required${expectedTier === "T0_AUTONOMOUS" ? "" : `, but the scenario expects ${expectedTier}`}`,
+      expectedTier === undefined || expectedTier === "T0_AUTONOMOUS",
+      `T0 — no human required${expectedTier && expectedTier !== "T0_AUTONOMOUS" ? `, but this scenario expects ${expectedTier}` : ""}`,
       started
     );
   } else {
@@ -223,7 +373,17 @@ async function run(scenario: Scenario, timeoutMs: number): Promise<boolean> {
       return false;
     }
 
-    const tierOk = gate.required_tier === expectedTier;
+    if (gate.required_quorum < 1 || (gate.operators_required ?? []).length === 0) {
+      record(
+        "freeze",
+        false,
+        `gate ${gate.id} opened at ${gate.required_tier} with quorum ${gate.required_quorum} and no operator named — nobody could ever satisfy it`,
+        started
+      );
+      return false;
+    }
+
+    const tierOk = expectedTier === undefined || gate.required_tier === expectedTier;
     record(
       "freeze",
       tierOk,
@@ -273,15 +433,13 @@ async function run(scenario: Scenario, timeoutMs: number): Promise<boolean> {
       );
     } else {
       console.log("");
-      console.log(
-        `      Gate ${gate.id} is open. ${gate.reason ?? ""}`
-      );
+      console.log(`      Gate ${gate.id} is open. ${gate.reason ?? ""}`);
       console.log(
         `      Scan World ID ${gate.required_quorum} time(s) — one distinct human per ${(gate.operators_required ?? []).join(" + ")}.`
       );
       console.log("");
 
-      const resolved = await waitFor<GateRow>(
+      const resolvedGate = await waitFor<GateRow>(
         "the World ID scans",
         timeoutMs,
         async () => {
@@ -298,7 +456,7 @@ async function run(scenario: Scenario, timeoutMs: number): Promise<boolean> {
         }
       );
 
-      if (!resolved) {
+      if (!resolvedGate) {
         record(
           "authorize",
           false,
@@ -316,7 +474,7 @@ async function run(scenario: Scenario, timeoutMs: number): Promise<boolean> {
       record(
         "authorize",
         true,
-        `${count ?? 0} distinct human(s) signed, gate ${resolved.status}`,
+        `${count ?? 0} distinct human(s) signed, gate ${resolvedGate.status}`,
         started
       );
     }
@@ -347,6 +505,22 @@ async function run(scenario: Scenario, timeoutMs: number): Promise<boolean> {
   );
 
   started = Date.now();
+  const after = await gridStateOf(supabase);
+  const post = readSignature(after, anomalyNode);
+  const recovered =
+    post === undefined ||
+    !post.headedOverCeiling ||
+    commit.applied_action === "ISOLATE_NODE";
+  record(
+    "mesh recovers",
+    recovered,
+    post
+      ? `${anomalyNode} now at ${post.temp.toFixed(1)}°C / load ${post.load.toFixed(2)} / ${post.power.toFixed(0)}W settling at ${(post.equilibrium ?? 0).toFixed(1)}°C against a ${post.tempCeiling}°C ceiling`
+      : `${anomalyNode} is no longer in the mesh`,
+    started
+  );
+
+  started = Date.now();
   record(
     "on-chain",
     Boolean(commit.chain_tx_hash),
@@ -373,7 +547,7 @@ async function main(): Promise<void> {
   const scenarioId = process.argv[2];
   if (!scenarioId || scenarioId.startsWith("--")) {
     console.error(
-      `usage: pnpm --filter @verimesh/agent run-scenario <${SCENARIOS.map((s) => s.id).join("|")}> [--auto-approve] [--timeout 300] [--expect-tier T2_QUORUM]`
+      `usage: pnpm --filter @verimesh/agent run-scenario <${SCENARIOS.map((s) => s.id).join("|")}> [--auto-approve] [--any-action] [--timeout 300] [--expect-tier T2_QUORUM]`
     );
     process.exit(1);
   }

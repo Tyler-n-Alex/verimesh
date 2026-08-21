@@ -91,9 +91,31 @@ dead demo. If it threw, that is a bug worth a Blockers row.
 > *"it stopped, and it is still stopped, because the second human isn't in the room — it cannot
 > talk itself past the requirement, and neither can we."* Then dismiss the modal and move on.
 > §2's pass lines 2.6 through 2.11 below are **out of scope for this run** — keep 2.1–2.5.
-> ⚠️ Leaving that gate open holds `node-07` in `awaiting_human`, which the detector now skips, so
-> the loop will not re-fire on it. That is intended. Reset with `pnpm --filter @verimesh/agent seed`
-> before a second run.
+> Leaving that gate open holds `node-07` in `awaiting_human`, which the detector skips, so the loop
+> will not re-fire on it. That is intended, and it no longer strands the demo: the next injection
+> cancels every open gate and releases every held node before it writes, and says in its output what
+> it cleared.
+
+## 1b · What an injection guarantees
+
+Every `scenario` / `run-scenario` / **Simulate failure** injection now does the same four things
+before it writes, and prints each one:
+
+1. **Cancels every open gate and releases every held node** — a node stuck in `awaiting_human` from
+   a previous run no longer silently swallows the next injection.
+2. **Returns every other node to baseline**, so one scenario's leftovers cannot bleed into the next.
+3. **Writes a physically self-consistent fault** — load, temperature, power, throughput and fan
+   speed that the simulator's own physics could have produced, driven hard enough that the node
+   settles *over* its ceiling. The fault holds instead of decaying, and the first observation the
+   agent sees is not a lie.
+4. **Checks the scenario's history precondition against the live subgraph**, and relocates the
+   scenario onto a node whose indexed record fits if the declared one no longer does.
+
+`pnpm --filter @verimesh/agent run-scenario <id>` adds a **`fault holds`** step that watches real
+telemetry for two simulator ticks and fails if the fault decayed — the injection is not assumed to
+have worked because it returned without erroring.
+
+---
 
 ## 2 · Scenario 1 — the ambiguous cascade (the money moment)
 
@@ -151,8 +173,12 @@ and gated a real commit. Check Basescan, not the screen.
 **Say the line out loud while 3.3 is on screen:** *"identical physics, identical verdict — and it
 costs a human this time, because the chain remembers."*
 
-If 3.3 shows **T0**, the escalation did not fire. Most likely `incidentCount` came back 0 — check
-`SUBGRAPH_URL` and that `node-09` actually has ≥ 2 indexed decisions.
+The injection checks this precondition against the live subgraph before it writes, and prints
+`history: ok — node-09 has N indexed incidents…`. If `node-09` has fallen under
+`REPEAT_OFFENDER_INCIDENTS`, the scenario **moves itself onto another opA node that has not**, says
+so, and runs there — read the node id off the output rather than assuming `node-09`. If it prints
+`history: NOT SATISFIED`, the beat cannot fire: no opA node has enough indexed history yet, and no
+amount of re-running will change that.
 
 ---
 
@@ -217,9 +243,11 @@ curl -X POST http://localhost:3000/api/device/register -H "Authorization: Bearer
 
 Nodes upsert and edges are replaced, so the mesh returns to baseline. **The chain and the subgraph
 do not reset** — that is correct and it is the point. The second run's history is genuinely deeper
-than the first's, which makes `recurring_fault` *more* convincing the second time, not less.
+than the first's, which makes `recurring_fault` *more* convincing the second time, and pushes
+`benign_spike` onto a fresher node.
 
-Restart the agent loop between runs so it does not act on stale in-memory faults.
+The agent loop can stay up across a reset. The simulator only writes a node it has not seen change
+underneath it, so a reset or an injection wins the race rather than being stepped back over.
 
 ---
 
@@ -233,7 +261,9 @@ Restart the agent loop between runs so it does not act on stale in-memory faults
 | Freeze modal rejects a legitimate scan with `NOT_ON_ALLOWLIST` | `B5.6` enrolled the wrong nullifier form | Nullifiers are canonical lowercase `0x`, zero-padded to 32 bytes. Never compare raw strings |
 | Any World ID scan is accepted, including strangers | `authz_config` allowlists are empty → `selfEnroll` is on | This is `B5.6`. Until fixed, **do not claim the allowlist is enforced** |
 | Second scan by the same human is accepted | distinctness broken — policy, DB unique index and chain revert all bypassed | **Stop.** This is the differentiator. Nothing else is worth demoing |
-| Tier is T0 when you expected T1 on `recurring_fault` | `incidentCount` came back 0 | Check `SUBGRAPH_URL`; confirm `node-09` has ≥ 2 indexed decisions |
+| Tier is T0 when you expected T1 on `recurring_fault` | `incidentCount` came back 0 | The injection prints its `history:` line before it writes — read that. If it says NOT SATISFIED, no opA node has ≥ 2 indexed decisions and the beat is unavailable; check `SUBGRAPH_URL` first |
+| `benign_spike` freezes at T1 instead of committing autonomously | its node has crossed `REPEAT_OFFENDER_INCIDENTS` — running the control case repeatedly is what does it | Nothing to do: the injection relocates to a node the chain has not seen and prints `moved off X onto Y`. If it cannot find one, every opA node is now a repeat offender |
+| The agent proposes something the scenario is not written around | the proposer is probabilistic and is meant to be | `run-scenario` reports this as the `narrative` step and still grades the tier against the action actually proposed. Pass `--any-action` to accept it |
 | Verdict is `ESCALATE` with *"cannot be verified — metrics no invariant applies to"* | a node id is not in `genio_blueprint.json`, or a metric arrived `null`/`NaN` from Supabase | Not a physics problem. Find the node named in the message |
 | Loop stalls after two quick incidents | two concurrent commits from one wallet took the same nonce | the send queue in `packages/chain` serialises this; if it recurs, raise it |
 | `graph auth` hangs forever | pinned graph-cli 0.80.x reads a lone argument as the node URL | `npx graph auth --studio <KEY>` |

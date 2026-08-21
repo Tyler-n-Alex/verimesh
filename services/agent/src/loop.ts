@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   authzConfig,
   isSatisfied,
+  maxTier,
   resolveGate,
   requireAuthorization,
   type AuthTier,
@@ -100,6 +101,30 @@ let cooldownAnnounced = false;
 const gateHoldAnnounced = new Set<number>();
 const lastActionByNode = new Map<string, number>();
 const settlingAnnounced = new Set<string>();
+
+function accountableRequirement(
+  requirement: AuthorizationRequirement,
+  operator: string,
+  confidence: number
+): AuthorizationRequirement {
+  if (requirement.tier !== "T0_AUTONOMOUS") return requirement;
+
+  const operators =
+    requirement.operatorsRequired.length > 0
+      ? requirement.operatorsRequired
+      : operator
+        ? [operator]
+        : [];
+
+  const tier = maxTier("T1_SINGLE", requirement.tier);
+
+  return {
+    tier,
+    quorum: Math.max(1, operators.length),
+    operatorsRequired: operators,
+    reason: `${requirement.reason} · held for a human anyway: the proposer's confidence ${confidence.toFixed(2)} is under the ${HIGH_CONFIDENCE} an autonomous commit requires`,
+  };
+}
 
 function gateRequirement(gate: GateRow): AuthorizationRequirement {
   return {
@@ -321,17 +346,21 @@ async function finalizeCommit(
     .update({ zerog_root: zerogRoot || null, auth_tier: authTier })
     .eq("id", proposalId);
 
+  let effect = "";
   if (proposal.node_id) {
-    await applyActionToGrid(
-      supabase,
-      appliedAction,
-      (proposal.target_nodes as string[]) ?? [proposal.node_id]
-    );
+    const targets = (proposal.target_nodes as string[]) ?? [proposal.node_id];
+    const change = await applyActionToGrid(supabase, appliedAction, targets);
+    effect =
+      change.applied.length > 0
+        ? ` — ${change.applied.join(", ")} moved to the state the verifier projected`
+        : ` — nothing moved: ${change.reason}`;
+
     if (appliedAction !== "ISOLATE_NODE") {
       await supabase
         .from("nodes")
         .update({ status: "healthy", updated_at: new Date().toISOString() })
-        .eq("id", proposal.node_id);
+        .eq("id", proposal.node_id)
+        .eq("status", "awaiting_human");
     }
   }
 
@@ -345,7 +374,7 @@ async function finalizeCommit(
   await logEvent(
     supabase,
     "commit",
-    `committed ${appliedAction} for proposal ${proposalId}`,
+    `committed ${appliedAction} for proposal ${proposalId}${effect}`,
     proposal.node_id ?? undefined
   );
 }
@@ -549,12 +578,20 @@ async function runCycle(supabase: SupabaseClient): Promise<void> {
       return;
     }
 
-    await openHumanGate(
-      supabase,
-      proposalRow.id,
-      detection.nodeId,
-      requirement
+    const gated = accountableRequirement(
+      requirement,
+      detection.operator,
+      proposal.confidence
     );
+
+    if (gated.tier !== requirement.tier) {
+      await supabase
+        .from("proposals")
+        .update({ auth_tier: gated.tier })
+        .eq("id", proposalRow.id);
+    }
+
+    await openHumanGate(supabase, proposalRow.id, detection.nodeId, gated);
   } finally {
     reasoning = false;
   }

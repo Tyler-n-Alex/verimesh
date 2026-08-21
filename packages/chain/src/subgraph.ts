@@ -69,6 +69,15 @@ query AuthzContext($nodeId: String!, $nullifiers: [Bytes!]!) {
 }
 `;
 
+const INCIDENTS_QUERY = `
+query IncidentCounts($nodeIds: [String!]!) {
+  nodeHistories(where: { nodeId_in: $nodeIds }, first: 1000) {
+    nodeId
+    incidentCount
+  }
+}
+`;
+
 export async function gqlFetch<T>(
   url: string,
   query: string,
@@ -153,4 +162,22 @@ export async function fetchAuthzContext(
     incidentCount: data.nodeHistories?.[0]?.incidentCount ?? 0,
     overrideCounts,
   };
+}
+
+export async function fetchIncidentCounts(
+  url: string,
+  nodeIds: string[]
+): Promise<Record<string, number>> {
+  if (nodeIds.length === 0) return {};
+
+  const data = await gqlFetch<{
+    nodeHistories: { nodeId: string; incidentCount: number }[];
+  }>(url, INCIDENTS_QUERY, { nodeIds });
+
+  const counts: Record<string, number> = {};
+  for (const nodeId of nodeIds) counts[nodeId] = 0;
+  for (const row of data.nodeHistories ?? []) {
+    counts[row.nodeId] = row.incidentCount;
+  }
+  return counts;
 }

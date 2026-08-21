@@ -23,11 +23,14 @@ async function reset(): Promise<void> {
   const running = await loopIsRunning();
   if (running) {
     console.log("");
-    console.log("⚠️  the agent loop is still writing telemetry.");
+    console.log("the agent loop is still writing telemetry.");
     console.log(
-      "   Stop it first (Ctrl-C) — the simulator holds the injected fault in memory"
+      "   That is safe — the simulator only writes a node it has not seen change"
     );
-    console.log("   and will write it straight back on the next tick.");
+    console.log(
+      "   underneath it, so this reset will win. It will start stepping the"
+    );
+    console.log("   fresh baseline on its next tick.");
     console.log("");
   }
 
@@ -67,12 +70,10 @@ async function reset(): Promise<void> {
   console.log(`edges now ${count ?? 0}`);
   console.log("");
 
-  if (running) {
-    console.log("Now restart the agent loop, or this reset will not hold:");
-  } else {
+  if (!running) {
     console.log("Start the agent loop:");
+    console.log("  pnpm --filter @verimesh/agent start");
   }
-  console.log("  pnpm --filter @verimesh/agent start");
   console.log("");
   console.log("Then:");
   console.log("  pnpm --filter @verimesh/agent run-scenario recurring_fault --timeout 300");

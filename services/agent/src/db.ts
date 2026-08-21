@@ -1,5 +1,12 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { GridNode, GridState, NodeMetrics, NodeStatus } from "@verimesh/shared";
+import type {
+  GridNode,
+  GridState,
+  NodeMetrics,
+  NodeStatus,
+  Proposal,
+} from "@verimesh/shared";
+import { applyAction } from "@verimesh/verifier";
 
 export function createAdminClient(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -31,8 +38,8 @@ interface DbEdge {
 export async function loadGridState(supabase: SupabaseClient): Promise<GridState> {
   const [{ data: nodes, error: nodesError }, { data: edges, error: edgesError }] =
     await Promise.all([
-      supabase.from("nodes").select("*"),
-      supabase.from("edges").select("from_node,to_node,weight"),
+      supabase.from("nodes").select("*").order("id"),
+      supabase.from("edges").select("from_node,to_node,weight").order("id"),
     ]);
 
   if (nodesError) throw nodesError;
@@ -117,59 +124,59 @@ export async function logEvent(
   });
 }
 
-export function applyActionToNode(node: GridNode, action: string): GridNode {
-  if (action === "ISOLATE_NODE") {
-    return {
-      ...node,
-      status: "isolated",
-      metrics: { ...node.metrics, throughput: 0, load: 0, power: 0 },
-    };
-  }
-  if (action === "THROTTLE_NODE") {
-    return {
-      ...node,
-      status: "warning",
-      metrics: { ...node.metrics, load: Math.max(0.2, node.metrics.load * 0.6) },
-    };
-  }
-  if (action === "SCALE_UP") {
-    return {
-      ...node,
-      status: "healthy",
-      metrics: { ...node.metrics, load: Math.max(0.1, node.metrics.load * 0.75) },
-    };
-  }
-  if (action === "REBALANCE_LOAD") {
-    return {
-      ...node,
-      status: "healthy",
-      metrics: { ...node.metrics, load: Math.max(0.15, node.metrics.load * 0.8) },
-    };
-  }
-  return node;
-}
-
 export async function applyActionToGrid(
   supabase: SupabaseClient,
   action: string,
   targetNodes: string[]
-): Promise<void> {
+): Promise<{ applied: string[]; reason: string }> {
+  if (action === "NO_OP") {
+    return { applied: [], reason: "NO_OP changes nothing" };
+  }
+
   const state = await loadGridState(supabase);
-  const targets = new Set(targetNodes);
+  const proposal: Proposal = {
+    diagnosis: "committed decision",
+    proposed_action: action as Proposal["proposed_action"],
+    target_nodes: targetNodes,
+    expected_effect: "apply the action the verifier projected",
+    confidence: 1,
+    risk_flags: [],
+  };
+
+  const projected = applyAction(state, proposal);
+  if (!projected.projectable) {
+    return { applied: [], reason: projected.reason };
+  }
+
+  const before = new Map(state.nodes.map((n) => [n.id, n]));
   const ts = Date.now();
+  const applied: string[] = [];
 
-  for (const node of state.nodes) {
-    if (!targets.has(node.id) && action !== "NO_OP") continue;
-    if (action === "NO_OP") continue;
+  for (const node of projected.state.nodes) {
+    const previous = before.get(node.id);
+    if (!previous) continue;
+    if (
+      previous.status === node.status &&
+      previous.metrics.load === node.metrics.load &&
+      previous.metrics.power === node.metrics.power &&
+      previous.metrics.throughput === node.metrics.throughput
+    ) {
+      continue;
+    }
 
-    const updated = applyActionToNode(node, action);
+    const status = node.status === "offline" ? "isolated" : node.status;
+
     await supabase
       .from("nodes")
       .update({
-        status: updated.status,
-        metrics: { ...updated.metrics, ts },
+        status,
+        metrics: { ...node.metrics, ts },
         updated_at: new Date(ts).toISOString(),
       })
       .eq("id", node.id);
+
+    applied.push(node.id);
   }
+
+  return { applied: applied.sort(), reason: projected.reason };
 }

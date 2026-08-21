@@ -6,6 +6,8 @@ export interface DemoScenario {
   signature: string;
   narrative: string;
   node: string | null;
+  history: "any" | "fresh" | "repeat";
+  relocatable: boolean;
   expect: {
     verdict: string;
     tier: string;

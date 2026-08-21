@@ -111,8 +111,14 @@ describe("C1.3 · the ambiguous cascade", () => {
 
   it("does nothing of the sort under the do-nothing counterfactual", () => {
     const baseline = verifyConstraints(state, proposal({}));
-    expect(baseline.verdict).toBe("VERIFIED");
+    expect(baseline.violations.some((v) => v.node === "node-12")).toBe(false);
     expect(baseline.peak["node-12"].temp).toBeLessThan(85);
+  });
+
+  it("escalates the do-nothing counterfactual because node-07 runs away on its own", () => {
+    const baseline = verifyConstraints(state, proposal({}));
+    expect(baseline.verdict).toBe("ESCALATE");
+    expect(baseline.preExisting.some((v) => v.node === "node-07")).toBe(true);
   });
 
   it("puts the blast radius across two operators", () => {
